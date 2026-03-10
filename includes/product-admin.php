@@ -66,8 +66,91 @@ function cmbwc_get_service_options() {
 	return $service_options;
 }
 
+function cmbwc_render_product_picker_group( $title, $product_ids, $selected_ids, $field_name ) {
+	?>
+	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:8px; background:#fff;">
+		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:600;">
+			<?php echo esc_html( $title ); ?>
+		</div>
+		<div style="padding:12px 14px;">
+			<?php foreach ( $product_ids as $product_id ) : ?>
+				<?php
+				$product = wc_get_product( $product_id );
+				if ( ! $product ) {
+					continue;
+				}
+				?>
+				<label style="display:block; margin:0 0 8px;">
+					<input
+						type="checkbox"
+						name="<?php echo esc_attr( $field_name ); ?>[]"
+						value="<?php echo esc_attr( $product_id ); ?>"
+						<?php checked( in_array( $product_id, $selected_ids, true ) ); ?>
+					>
+					<?php echo esc_html( $product->get_name() ); ?>
+				</label>
+			<?php endforeach; ?>
+		</div>
+	</div>
+	<?php
+}
+
+function cmbwc_render_addon_group( $title, $product_ids, $menu_addons ) {
+	?>
+	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:8px; background:#fff;">
+		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:600;">
+			<?php echo esc_html( $title ); ?>
+		</div>
+		<div style="padding:12px 14px;">
+			<?php foreach ( $product_ids as $product_id ) : ?>
+				<?php
+				$product = wc_get_product( $product_id );
+				if ( ! $product ) {
+					continue;
+				}
+
+				$addon_settings = isset( $menu_addons[ $product_id ] ) && is_array( $menu_addons[ $product_id ] )
+					? $menu_addons[ $product_id ]
+					: array(
+						'enabled'       => 'no',
+						'follow_covers' => 'yes',
+					);
+
+				$enabled       = isset( $addon_settings['enabled'] ) ? $addon_settings['enabled'] : 'no';
+				$follow_covers = isset( $addon_settings['follow_covers'] ) ? $addon_settings['follow_covers'] : 'yes';
+				?>
+				<div style="padding:10px 0; border-bottom:1px dashed #eee;">
+					<label style="display:block; margin-bottom:6px;">
+						<input
+							type="checkbox"
+							name="_cmbwc_menu_addons[<?php echo esc_attr( $product_id ); ?>][enabled]"
+							value="yes"
+							<?php checked( $enabled, 'yes' ); ?>
+						>
+						<?php echo esc_html( $product->get_name() ); ?>
+						<?php if ( '' !== $product->get_price() ) : ?>
+							- <?php echo wp_kses_post( wc_price( $product->get_price() ) ); ?>
+						<?php endif; ?>
+					</label>
+
+					<label style="display:block; margin-left:22px;">
+						<input
+							type="checkbox"
+							name="_cmbwc_menu_addons[<?php echo esc_attr( $product_id ); ?>][follow_covers]"
+							value="yes"
+							<?php checked( $follow_covers, 'yes' ); ?>
+						>
+						Følger kuvertantal
+					</label>
+				</div>
+			<?php endforeach; ?>
+		</div>
+	</div>
+	<?php
+}
+
 /**
- * Add checkbox in General tab
+ * Small checkbox in Woo general tab
  */
 add_action( 'woocommerce_product_options_general_product_data', 'cmbwc_add_menu_enable_field' );
 
@@ -85,9 +168,6 @@ function cmbwc_add_menu_enable_field() {
 	echo '</div>';
 }
 
-/**
- * Save checkbox
- */
 add_action( 'woocommerce_process_product_meta', 'cmbwc_save_menu_enable_field' );
 
 function cmbwc_save_menu_enable_field( $post_id ) {
@@ -96,41 +176,30 @@ function cmbwc_save_menu_enable_field( $post_id ) {
 }
 
 /**
- * Add custom product data tab
+ * Add separate metabox
  */
-add_filter( 'woocommerce_product_data_tabs', 'cmbwc_product_data_tab' );
+add_action( 'add_meta_boxes', 'cmbwc_register_product_metabox' );
 
-function cmbwc_product_data_tab( $tabs ) {
-	$tabs['cmbwc_menu_builder'] = array(
-		'label'    => __( 'Catering Menu', 'catering-menu-builder' ),
-		'target'   => 'cmbwc_menu_builder_data',
-		'class'    => array( 'show_if_simple', 'show_if_variable', 'show_if_grouped', 'show_if_external' ),
-		'priority' => 80,
+function cmbwc_register_product_metabox() {
+	add_meta_box(
+		'cmbwc_menu_builder_metabox',
+		'Catering Menu Builder',
+		'cmbwc_render_product_metabox',
+		'product',
+		'normal',
+		'high'
 	);
-
-	return $tabs;
 }
 
-/**
- * Output tab panel
- */
-add_action( 'woocommerce_product_data_panels', 'cmbwc_product_data_panel' );
-
-function cmbwc_product_data_panel() {
-	global $post;
-
-	if ( ! $post || 'product' !== get_post_type( $post ) ) {
-		return;
-	}
-
-	$product_id         = $post->ID;
-	$is_menu            = get_post_meta( $product_id, '_cmbwc_is_menu', true );
-	$included_products  = get_post_meta( $product_id, '_cmbwc_included_products', true );
-	$menu_addons        = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
-	$service_allowed    = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
-	$minimum_covers     = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
-	$cover_step         = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
-	$lead_time_days     = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
+function cmbwc_render_product_metabox( $post ) {
+	$product_id        = $post->ID;
+	$is_menu           = get_post_meta( $product_id, '_cmbwc_is_menu', true );
+	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
+	$menu_addons       = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
+	$service_allowed   = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
+	$minimum_covers    = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+	$cover_step        = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
+	$lead_time_days    = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
 
 	if ( ! is_array( $included_products ) ) {
 		$included_products = array();
@@ -154,169 +223,99 @@ function cmbwc_product_data_panel() {
 
 	$grouped_products = cmbwc_get_public_products_grouped_by_category();
 	$service_options  = cmbwc_get_service_options();
+
+	wp_nonce_field( 'cmbwc_save_metabox', 'cmbwc_metabox_nonce' );
 	?>
-	<div id="cmbwc_menu_builder_data" class="panel woocommerce_options_panel">
+	<div style="padding:8px 0 0;">
+		<p style="margin-bottom:16px;">
+			<label>
+				<input type="checkbox" name="_cmbwc_is_menu_duplicate" value="yes" <?php checked( $is_menu, 'yes' ); ?>>
+				<strong>Brug dette produkt som menu</strong>
+			</label>
+		</p>
 
-		<div class="options_group">
-			<p class="form-field">
-				<label>
-					<input type="checkbox" name="_cmbwc_is_menu_duplicate" value="yes" <?php checked( $is_menu, 'yes' ); ?>>
-					<?php esc_html_e( 'Brug dette produkt som menu', 'catering-menu-builder' ); ?>
-				</label>
+		<div style="display:grid; grid-template-columns:repeat(3, minmax(180px, 1fr)); gap:16px; margin-bottom:24px;">
+			<p style="margin:0;">
+				<label for="_cmbwc_minimum_covers"><strong>Minimum antal kuverter</strong></label><br>
+				<input type="number" min="1" step="1" id="_cmbwc_minimum_covers" name="_cmbwc_minimum_covers" value="<?php echo esc_attr( $minimum_covers ); ?>" style="width:100%;">
+			</p>
+
+			<p style="margin:0;">
+				<label for="_cmbwc_cover_step"><strong>Kuvert-interval</strong></label><br>
+				<input type="number" min="1" step="1" id="_cmbwc_cover_step" name="_cmbwc_cover_step" value="<?php echo esc_attr( $cover_step ); ?>" style="width:100%;">
+			</p>
+
+			<p style="margin:0;">
+				<label for="_cmbwc_lead_time_days"><strong>Bestilles senest (dage før)</strong></label><br>
+				<input type="number" min="0" step="1" id="_cmbwc_lead_time_days" name="_cmbwc_lead_time_days" value="<?php echo esc_attr( $lead_time_days ); ?>" style="width:100%;">
 			</p>
 		</div>
 
-		<div class="options_group">
-			<p class="form-field">
-				<label for="_cmbwc_minimum_covers"><?php esc_html_e( 'Minimum antal kuverter', 'catering-menu-builder' ); ?></label>
-				<input type="number" class="short" min="1" step="1" id="_cmbwc_minimum_covers" name="_cmbwc_minimum_covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
-			</p>
+		<h2 style="margin:24px 0 12px;">Retter i menuen</h2>
+		<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
+			<?php cmbwc_render_product_picker_group( $category_name, $product_ids, $included_products, '_cmbwc_included_products' ); ?>
+		<?php endforeach; ?>
 
-			<p class="form-field">
-				<label for="_cmbwc_cover_step"><?php esc_html_e( 'Kuvert-interval', 'catering-menu-builder' ); ?></label>
-				<input type="number" class="short" min="1" step="1" id="_cmbwc_cover_step" name="_cmbwc_cover_step" value="<?php echo esc_attr( $cover_step ); ?>">
-			</p>
+		<h2 style="margin:32px 0 12px;">Mulige tilvalg</h2>
+		<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
+			<?php cmbwc_render_addon_group( $category_name, $product_ids, $menu_addons ); ?>
+		<?php endforeach; ?>
 
-			<p class="form-field">
-				<label for="_cmbwc_lead_time_days"><?php esc_html_e( 'Bestilles senest (dage før)', 'catering-menu-builder' ); ?></label>
-				<input type="number" class="short" min="0" step="1" id="_cmbwc_lead_time_days" name="_cmbwc_lead_time_days" value="<?php echo esc_attr( $lead_time_days ); ?>">
-			</p>
+		<h2 style="margin:32px 0 12px;">Service / anretning</h2>
+		<div style="border:1px solid #ddd; border-radius:8px; background:#fff; padding:14px;">
+			<?php foreach ( $service_options as $service_key => $service_data ) : ?>
+				<?php
+				$label      = isset( $service_data['label'] ) ? $service_data['label'] : $service_key;
+				$price      = isset( $service_data['price'] ) ? (float) $service_data['price'] : 0;
+				$price_type = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
+				?>
+				<p style="margin:0 0 10px;">
+					<label>
+						<input
+							type="checkbox"
+							name="_cmbwc_service_allowed[]"
+							value="<?php echo esc_attr( $service_key ); ?>"
+							<?php checked( in_array( $service_key, $service_allowed, true ) ); ?>
+						>
+						<?php echo esc_html( $label ); ?>
+						—
+						<?php
+						echo wp_kses_post(
+							'fixed' === $price_type
+								? wc_price( $price )
+								: wc_price( $price ) . ' pr. kuvert'
+						);
+						?>
+					</label>
+				</p>
+			<?php endforeach; ?>
 		</div>
-
-		<div class="options_group">
-			<p class="form-field"><strong><?php esc_html_e( 'Retter i menuen', 'catering-menu-builder' ); ?></strong></p>
-
-			<div style="padding: 0 12px 12px;">
-				<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
-					<div style="margin-bottom:16px; border:1px solid #e5e5e5; padding:10px; border-radius:6px;">
-						<h4 style="margin:0 0 10px;"><?php echo esc_html( $category_name ); ?></h4>
-
-						<?php foreach ( $product_ids as $loop_product_id ) : ?>
-							<?php
-							$loop_product = wc_get_product( $loop_product_id );
-							if ( ! $loop_product ) {
-								continue;
-							}
-							?>
-							<p style="margin:0 0 6px;">
-								<label>
-									<input
-										type="checkbox"
-										name="_cmbwc_included_products[]"
-										value="<?php echo esc_attr( $loop_product_id ); ?>"
-										<?php checked( in_array( $loop_product_id, $included_products, true ) ); ?>
-									>
-									<?php echo esc_html( $loop_product->get_name() ); ?>
-								</label>
-							</p>
-						<?php endforeach; ?>
-					</div>
-				<?php endforeach; ?>
-			</div>
-		</div>
-
-		<div class="options_group">
-			<p class="form-field"><strong><?php esc_html_e( 'Mulige tilvalg', 'catering-menu-builder' ); ?></strong></p>
-
-			<div style="padding: 0 12px 12px;">
-				<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
-					<div style="margin-bottom:16px; border:1px solid #e5e5e5; padding:10px; border-radius:6px;">
-						<h4 style="margin:0 0 10px;"><?php echo esc_html( $category_name ); ?></h4>
-
-						<?php foreach ( $product_ids as $loop_product_id ) : ?>
-							<?php
-							$loop_product = wc_get_product( $loop_product_id );
-							if ( ! $loop_product ) {
-								continue;
-							}
-
-							$addon_settings = isset( $menu_addons[ $loop_product_id ] ) && is_array( $menu_addons[ $loop_product_id ] )
-								? $menu_addons[ $loop_product_id ]
-								: array(
-									'enabled'       => 'no',
-									'follow_covers' => 'yes',
-								);
-
-							$enabled       = isset( $addon_settings['enabled'] ) ? $addon_settings['enabled'] : 'no';
-							$follow_covers = isset( $addon_settings['follow_covers'] ) ? $addon_settings['follow_covers'] : 'yes';
-							?>
-							<div style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed #eee;">
-								<p style="margin:0 0 6px;">
-									<label>
-										<input
-											type="checkbox"
-											name="_cmbwc_menu_addons[<?php echo esc_attr( $loop_product_id ); ?>][enabled]"
-											value="yes"
-											<?php checked( $enabled, 'yes' ); ?>
-										>
-										<?php echo esc_html( $loop_product->get_name() ); ?>
-										<?php if ( '' !== $loop_product->get_price() ) : ?>
-											- <?php echo wp_kses_post( wc_price( $loop_product->get_price() ) ); ?>
-										<?php endif; ?>
-									</label>
-								</p>
-
-								<p style="margin:0 0 0 22px;">
-									<label>
-										<input
-											type="checkbox"
-											name="_cmbwc_menu_addons[<?php echo esc_attr( $loop_product_id ); ?>][follow_covers]"
-											value="yes"
-											<?php checked( $follow_covers, 'yes' ); ?>
-										>
-										<?php esc_html_e( 'Følger kuvertantal', 'catering-menu-builder' ); ?>
-									</label>
-								</p>
-							</div>
-						<?php endforeach; ?>
-					</div>
-				<?php endforeach; ?>
-			</div>
-		</div>
-
-		<div class="options_group">
-			<p class="form-field"><strong><?php esc_html_e( 'Service / anretning', 'catering-menu-builder' ); ?></strong></p>
-
-			<div style="padding: 0 12px 12px;">
-				<?php foreach ( $service_options as $service_key => $service_data ) : ?>
-					<?php
-					$label      = isset( $service_data['label'] ) ? $service_data['label'] : $service_key;
-					$price      = isset( $service_data['price'] ) ? (float) $service_data['price'] : 0;
-					$price_type = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
-					?>
-					<p style="margin:0 0 8px;">
-						<label>
-							<input
-								type="checkbox"
-								name="_cmbwc_service_allowed[]"
-								value="<?php echo esc_attr( $service_key ); ?>"
-								<?php checked( in_array( $service_key, $service_allowed, true ) ); ?>
-							>
-							<?php echo esc_html( $label ); ?>
-							—
-							<?php
-							echo wp_kses_post(
-								'fixed' === $price_type
-									? wc_price( $price )
-									: wc_price( $price ) . ' pr. kuvert'
-							);
-							?>
-						</label>
-					</p>
-				<?php endforeach; ?>
-			</div>
-		</div>
-
 	</div>
 	<?php
 }
 
 /**
- * Save panel
+ * Save metabox
  */
-add_action( 'woocommerce_process_product_meta', 'cmbwc_save_product_data_panel' );
+add_action( 'save_post_product', 'cmbwc_save_product_metabox' );
 
-function cmbwc_save_product_data_panel( $post_id ) {
+function cmbwc_save_product_metabox( $post_id ) {
+	if ( ! isset( $_POST['cmbwc_metabox_nonce'] ) ) {
+		return;
+	}
+
+	if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cmbwc_metabox_nonce'] ) ), 'cmbwc_save_metabox' ) ) {
+		return;
+	}
+
+	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+		return;
+	}
+
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return;
+	}
+
 	$is_menu = ( isset( $_POST['_cmbwc_is_menu'] ) || isset( $_POST['_cmbwc_is_menu_duplicate'] ) ) ? 'yes' : 'no';
 	update_post_meta( $post_id, '_cmbwc_is_menu', $is_menu );
 
@@ -341,6 +340,7 @@ function cmbwc_save_product_data_panel( $post_id ) {
 
 		foreach ( $raw_addons as $addon_product_id => $addon_data ) {
 			$addon_product_id = absint( $addon_product_id );
+
 			if ( ! $addon_product_id || ! is_array( $addon_data ) ) {
 				continue;
 			}
