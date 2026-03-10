@@ -56,11 +56,6 @@ function cmbwc_shortcode_menu_info() {
 	}
 
 	$product_id = $product->get_id();
-
-	if ( ! cmbwc_is_menu_product( $product_id ) ) {
-		return '';
-	}
-
 	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
 	$lead_time      = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
 
@@ -98,13 +93,8 @@ function cmbwc_shortcode_menu_contents() {
 		return '';
 	}
 
-	$product_id = $product->get_id();
-
-	if ( ! cmbwc_is_menu_product( $product_id ) ) {
-		return '';
-	}
-
-	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
+	$product_id         = $product->get_id();
+	$included_products  = get_post_meta( $product_id, '_cmbwc_included_products', true );
 
 	if ( empty( $included_products ) || ! is_array( $included_products ) ) {
 		return '';
@@ -180,17 +170,12 @@ function cmbwc_shortcode_menu_options() {
 		return '';
 	}
 
-	$product_id = $product->get_id();
-
-	if ( ! cmbwc_is_menu_product( $product_id ) ) {
-		return '';
-	}
-
-	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
-	$cover_step     = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
-	$menu_addons    = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
-	$service_keys   = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
-	$service_all    = cmbwc_get_service_options();
+	$product_id      = $product->get_id();
+	$minimum_covers  = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+	$cover_step      = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
+	$menu_addons     = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
+	$service_keys    = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
+	$service_all     = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -209,7 +194,6 @@ function cmbwc_shortcode_menu_options() {
 	}
 
 	$price_per_cover = (float) $product->get_price();
-
 	$addons_for_output = array();
 
 	foreach ( $menu_addons as $addon_product_id => $addon_data ) {

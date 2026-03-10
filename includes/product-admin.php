@@ -67,7 +67,7 @@ function cmbwc_get_service_options() {
 }
 
 /**
- * Product type checkbox
+ * Add checkbox in General tab
  */
 add_action( 'woocommerce_product_options_general_product_data', 'cmbwc_add_menu_enable_field' );
 
@@ -85,6 +85,9 @@ function cmbwc_add_menu_enable_field() {
 	echo '</div>';
 }
 
+/**
+ * Save checkbox
+ */
 add_action( 'woocommerce_process_product_meta', 'cmbwc_save_menu_enable_field' );
 
 function cmbwc_save_menu_enable_field( $post_id ) {
@@ -93,7 +96,7 @@ function cmbwc_save_menu_enable_field( $post_id ) {
 }
 
 /**
- * Product data tab
+ * Add custom product data tab
  */
 add_filter( 'woocommerce_product_data_tabs', 'cmbwc_product_data_tab' );
 
@@ -101,17 +104,24 @@ function cmbwc_product_data_tab( $tabs ) {
 	$tabs['cmbwc_menu_builder'] = array(
 		'label'    => __( 'Catering Menu', 'catering-menu-builder' ),
 		'target'   => 'cmbwc_menu_builder_data',
-		'class'    => array(),
+		'class'    => array( 'show_if_simple', 'show_if_variable', 'show_if_grouped', 'show_if_external' ),
 		'priority' => 80,
 	);
 
 	return $tabs;
 }
 
+/**
+ * Output tab panel
+ */
 add_action( 'woocommerce_product_data_panels', 'cmbwc_product_data_panel' );
 
 function cmbwc_product_data_panel() {
 	global $post;
+
+	if ( ! $post || 'product' !== get_post_type( $post ) ) {
+		return;
+	}
 
 	$product_id         = $post->ID;
 	$is_menu            = get_post_meta( $product_id, '_cmbwc_is_menu', true );
@@ -145,7 +155,7 @@ function cmbwc_product_data_panel() {
 	$grouped_products = cmbwc_get_public_products_grouped_by_category();
 	$service_options  = cmbwc_get_service_options();
 	?>
-	<div id="cmbwc_menu_builder_data" class="panel woocommerce_options_panel hidden">
+	<div id="cmbwc_menu_builder_data" class="panel woocommerce_options_panel">
 
 		<div class="options_group">
 			<p class="form-field">
@@ -301,6 +311,9 @@ function cmbwc_product_data_panel() {
 	<?php
 }
 
+/**
+ * Save panel
+ */
 add_action( 'woocommerce_process_product_meta', 'cmbwc_save_product_data_panel' );
 
 function cmbwc_save_product_data_panel( $post_id ) {
