@@ -55,9 +55,9 @@ function cmbwc_shortcode_menu_info() {
 		return '';
 	}
 
-	$product_id = $product->get_id();
-	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
-	$lead_time      = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
+	$product_id      = $product->get_id();
+	$minimum_covers  = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+	$lead_time       = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -93,8 +93,8 @@ function cmbwc_shortcode_menu_contents() {
 		return '';
 	}
 
-	$product_id         = $product->get_id();
-	$included_products  = get_post_meta( $product_id, '_cmbwc_included_products', true );
+	$product_id        = $product->get_id();
+	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
 
 	if ( empty( $included_products ) || ! is_array( $included_products ) ) {
 		return '';
@@ -170,12 +170,12 @@ function cmbwc_shortcode_menu_options() {
 		return '';
 	}
 
-	$product_id      = $product->get_id();
-	$minimum_covers  = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
-	$cover_step      = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
-	$menu_addons     = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
-	$service_keys    = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
-	$service_all     = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
+	$product_id     = $product->get_id();
+	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+	$cover_step     = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
+	$menu_addons    = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
+	$service_keys   = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
+	$service_all    = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -193,7 +193,7 @@ function cmbwc_shortcode_menu_options() {
 		$service_keys = array();
 	}
 
-	$price_per_cover = (float) $product->get_price();
+	$price_per_cover   = (float) $product->get_price();
 	$addons_for_output = array();
 
 	foreach ( $menu_addons as $addon_product_id => $addon_data ) {
@@ -230,13 +230,10 @@ function cmbwc_shortcode_menu_options() {
 		);
 	}
 
-	$form_id = 'cmbwc-form-' . $product_id;
-
 	ob_start();
 	?>
 	<div
 		class="cmbwc-box cmbwc-menu-options"
-		id="<?php echo esc_attr( $form_id ); ?>"
 		data-product-id="<?php echo esc_attr( $product_id ); ?>"
 		data-price-per-cover="<?php echo esc_attr( $price_per_cover ); ?>"
 		data-minimum-covers="<?php echo esc_attr( $minimum_covers ); ?>"
@@ -385,7 +382,9 @@ function cmbwc_shortcode_menu_options() {
 			</div>
 		</div>
 
-		<div class="cmbwc-hidden-sync" style="display:none;"></div>
+		<input type="hidden" class="cmbwc-local-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
+		<input type="hidden" class="cmbwc-local-sync-service" value="">
+		<input type="hidden" class="cmbwc-local-sync-addons" value="">
 	</div>
 	<?php
 	return ob_get_clean();

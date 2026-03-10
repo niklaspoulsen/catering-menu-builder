@@ -17,23 +17,27 @@ jQuery(function ($) {
 		return isNaN(n) ? fallback : n;
 	}
 
-	function ensureWooForm($box) {
-		var $form = $('form.cart').first();
+	function getWooForm() {
+		return $('form.cart').first();
+	}
+
+	function ensureWooSyncFields() {
+		var $form = getWooForm();
 
 		if (!$form.length) {
 			return null;
 		}
 
-		if (!$form.find('.cmbwc-sync-covers').length) {
-			$form.append('<input type="hidden" name="cmbwc_covers" class="cmbwc-sync-covers" value="">');
+		if (!$form.find('input[name="cmbwc_covers"]').length) {
+			$form.append('<input type="hidden" name="cmbwc_covers" value="">');
 		}
 
-		if (!$form.find('.cmbwc-sync-service').length) {
-			$form.append('<input type="hidden" name="cmbwc_selected_service" class="cmbwc-sync-service" value="">');
+		if (!$form.find('input[name="cmbwc_selected_service"]').length) {
+			$form.append('<input type="hidden" name="cmbwc_selected_service" value="">');
 		}
 
-		if (!$form.find('.cmbwc-sync-addons').length) {
-			$form.append('<input type="hidden" name="cmbwc_selected_addons" class="cmbwc-sync-addons" value="">');
+		if (!$form.find('input[name="cmbwc_selected_addons"]').length) {
+			$form.append('<input type="hidden" name="cmbwc_selected_addons" value="">');
 		}
 
 		return $form;
@@ -42,8 +46,8 @@ jQuery(function ($) {
 	function normalizeCovers($box) {
 		var $input = $box.find('.cmbwc-covers');
 		var covers = getInt($input.val(), 1);
-		var min = getInt($box.data('minimum-covers'), 1);
-		var step = getInt($box.data('cover-step'), 1);
+		var min = getInt($box.attr('data-minimum-covers'), 1);
+		var step = getInt($box.attr('data-cover-step'), 1);
 
 		if (covers < min) {
 			covers = min;
@@ -82,8 +86,7 @@ jQuery(function ($) {
 			}
 
 			if (followCovers) {
-				$qty.val(covers);
-				$qty.prop('disabled', true);
+				$qty.val(covers).prop('disabled', true);
 			} else {
 				$qty.prop('disabled', false);
 				if (getInt($qty.val(), 0) < 1) {
@@ -105,7 +108,7 @@ jQuery(function ($) {
 				return;
 			}
 
-			var addonId = $item.attr('data-addon-id');
+			var addonId = getInt($item.attr('data-addon-id'), 0);
 			var addonPrice = getNumber($item.attr('data-addon-price'), 0);
 			var followCovers = String($item.attr('data-follow-covers')) === 'yes';
 			var qty = followCovers ? covers : getInt($item.find('.cmbwc-addon-qty').val(), 1);
@@ -130,10 +133,8 @@ jQuery(function ($) {
 	}
 
 	function calculateService($box, covers) {
-		var total = 0;
-		var selected = '';
-
 		var $radio = $box.find('.cmbwc-service-radio:checked');
+
 		if (!$radio.length) {
 			return {
 				total: 0,
@@ -144,35 +145,33 @@ jQuery(function ($) {
 		var $item = $radio.closest('.cmbwc-service-item');
 		var price = getNumber($item.attr('data-service-price'), 0);
 		var priceType = String($item.attr('data-service-price-type') || 'fixed');
-
-		selected = $radio.val();
-
-		if (priceType === 'per_cover') {
-			total = price * covers;
-		} else {
-			total = price;
-		}
+		var total = priceType === 'per_cover' ? price * covers : price;
 
 		return {
 			total: total,
-			selected: selected
+			selected: $radio.val()
 		};
 	}
 
 	function syncWooForm($box, covers, addonData, serviceData) {
-		var $form = ensureWooForm($box);
-		if (!$form) {
+		var $form = ensureWooSyncFields();
+
+		if (!$form || !$form.length) {
 			return;
 		}
 
 		var $wooQty = $form.find('input.qty').first();
 		if ($wooQty.length) {
-			$wooQty.val(covers).trigger('change');
+			$wooQty.val(1).trigger('change');
 		}
 
-		$form.find('.cmbwc-sync-covers').val(covers);
-		$form.find('.cmbwc-sync-service').val(serviceData.selected);
-		$form.find('.cmbwc-sync-addons').val(JSON.stringify(addonData.selected));
+		$form.find('input[name="cmbwc_covers"]').val(covers);
+		$form.find('input[name="cmbwc_selected_service"]').val(serviceData.selected);
+		$form.find('input[name="cmbwc_selected_addons"]').val(JSON.stringify(addonData.selected));
+
+		$box.find('.cmbwc-local-sync-covers').val(covers);
+		$box.find('.cmbwc-local-sync-service').val(serviceData.selected);
+		$box.find('.cmbwc-local-sync-addons').val(JSON.stringify(addonData.selected));
 	}
 
 	function updateBox($box) {
@@ -200,6 +199,12 @@ jQuery(function ($) {
 		syncWooForm($box, covers, addonData, serviceData);
 	}
 
+	function updateAllBoxes() {
+		$('.cmbwc-menu-options').each(function () {
+			updateBox($(this));
+		});
+	}
+
 	$(document).on('input change', '.cmbwc-covers', function () {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
@@ -216,7 +221,9 @@ jQuery(function ($) {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$('.cmbwc-menu-options').each(function () {
-		updateBox($(this));
+	$(document).on('submit', 'form.cart', function () {
+		updateAllBoxes();
 	});
+
+	updateAllBoxes();
 });
