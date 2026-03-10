@@ -1,33 +1,198 @@
 .cmbwc-box {
-	border: 1px solid #ddd;
-	padding: 16px;
-	margin-bottom: 16px;
-	border-radius: 10px;
+	border: 1px solid #e5e5e5;
+	padding: 20px;
+	margin-bottom: 20px;
+	border-radius: 14px;
 	background: #fff;
 }
 
 .cmbwc-title {
+	margin: 0 0 16px;
+	font-size: 24px;
+	line-height: 1.2;
+}
+
+.cmbwc-subtitle {
 	margin: 0 0 12px;
-	font-size: 20px;
+	font-size: 18px;
+	line-height: 1.3;
 }
 
-.cmbwc-info-row,
-.cmbwc-field,
-.cmbwc-price-box div {
-	margin-bottom: 10px;
+.cmbwc-section + .cmbwc-section,
+.cmbwc-content-group + .cmbwc-content-group {
+	margin-top: 20px;
 }
 
-.cmbwc-list {
-	margin: 0;
-	padding-left: 18px;
+.cmbwc-info-list {
+	display: grid;
+	gap: 10px;
 }
 
-.cmbwc-list-item {
+.cmbwc-info-item {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+	border-bottom: 1px solid #f1f1f1;
+}
+
+.cmbwc-info-label {
+	color: #666;
+}
+
+.cmbwc-info-value {
+	font-weight: 600;
+}
+
+.cmbwc-field label {
+	display: block;
 	margin-bottom: 8px;
 }
 
+.cmbwc-covers {
+	width: 120px;
+	padding: 10px 12px;
+	border: 1px solid #d8d8d8;
+	border-radius: 10px;
+}
+
+.cmbwc-card-list {
+	display: grid;
+	gap: 12px;
+}
+
+.cmbwc-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px;
+	border: 1px solid #f0f0f0;
+	border-radius: 12px;
+	background: #fafafa;
+}
+
+.cmbwc-card-image-wrap {
+	flex: 0 0 56px;
+}
+
+.cmbwc-card-image {
+	width: 56px;
+	height: 56px;
+	object-fit: cover;
+	border-radius: 999px;
+	display: block;
+}
+
+.cmbwc-card-title {
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.cmbwc-addon-list,
+.cmbwc-service-list {
+	display: grid;
+	gap: 12px;
+}
+
+.cmbwc-addon-item,
+.cmbwc-service-item {
+	border: 1px solid #ececec;
+	border-radius: 14px;
+	padding: 12px;
+	background: #fff;
+}
+
+.cmbwc-addon-label,
+.cmbwc-service-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	cursor: pointer;
+}
+
+.cmbwc-addon-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.cmbwc-addon-image {
+	width: 52px;
+	height: 52px;
+	object-fit: cover;
+	border-radius: 999px;
+	flex: 0 0 52px;
+}
+
+.cmbwc-addon-name-wrap,
+.cmbwc-service-content {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.cmbwc-addon-name,
+.cmbwc-service-name {
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.cmbwc-addon-price,
+.cmbwc-service-price,
+.cmbwc-addon-note,
+.cmbwc-addon-follow-text {
+	color: #666;
+	font-size: 14px;
+	line-height: 1.3;
+}
+
+.cmbwc-addon-qty-wrap {
+	flex: 0 0 auto;
+}
+
+.cmbwc-addon-qty {
+	width: 76px;
+	padding: 8px 10px;
+	border: 1px solid #d8d8d8;
+	border-radius: 10px;
+}
+
 .cmbwc-price-box {
-	margin-top: 14px;
+	border-top: 1px solid #efefef;
 	padding-top: 12px;
-	border-top: 1px solid #eee;
+	display: grid;
+	gap: 10px;
+}
+
+.cmbwc-price-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.cmbwc-price-row-total {
+	padding-top: 10px;
+	border-top: 1px solid #efefef;
+	font-size: 18px;
+}
+
+@media (max-width: 767px) {
+	.cmbwc-addon-label,
+	.cmbwc-service-item,
+	.cmbwc-info-item,
+	.cmbwc-price-row {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.cmbwc-addon-qty-wrap {
+		width: 100%;
+	}
+
+	.cmbwc-addon-qty {
+		width: 100%;
+	}
 }
