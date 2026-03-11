@@ -196,3 +196,40 @@
 		width: 100%;
 	}
 }
+
+.cmbwc-cart-meta {
+	margin-top: 10px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.cmbwc-cart-row {
+	margin-bottom: 8px;
+}
+
+.cmbwc-cart-label {
+	font-weight: 600;
+	margin-right: 6px;
+}
+
+.cmbwc-cart-group {
+	margin-top: 10px;
+}
+
+.cmbwc-cart-group-title {
+	font-weight: 700;
+	margin-bottom: 4px;
+}
+
+.cmbwc-cart-list {
+	margin: 0;
+	padding-left: 18px;
+}
+
+.cmbwc-cart-list li {
+	margin: 0 0 4px;
+}
+
+.cmbwc-cart-service {
+	margin-top: 2px;
+}

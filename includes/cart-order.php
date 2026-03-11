@@ -95,6 +95,7 @@ function cmbwc_validate_add_to_cart( $passed, $product_id, $quantity ) {
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
 	}
+
 	if ( $cover_step < 1 ) {
 		$cover_step = 1;
 	}
@@ -106,6 +107,7 @@ function cmbwc_validate_add_to_cart( $passed, $product_id, $quantity ) {
 
 	if ( $cover_step > 1 ) {
 		$diff = $covers - $minimum_covers;
+
 		if ( $diff % $cover_step !== 0 ) {
 			wc_add_notice( sprintf( 'Kuvertantal skal følge interval på %d.', $cover_step ), 'error' );
 			return false;
@@ -196,52 +198,82 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 	return $cart_item;
 }
 
-add_filter( 'woocommerce_get_item_data', 'cmbwc_display_cart_item_data', 10, 2 );
+/**
+ * Hide default WooCommerce meta rendering for our menu lines.
+ * We render a cleaner block under the product name instead.
+ */
+add_filter( 'woocommerce_get_item_data', 'cmbwc_hide_default_item_data', 10, 2 );
 
-function cmbwc_display_cart_item_data( $item_data, $cart_item ) {
+function cmbwc_hide_default_item_data( $item_data, $cart_item ) {
 	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
 		return $item_data;
 	}
 
-	$data = $cart_item['cmbwc_data'];
-
-	if ( ! empty( $data['covers'] ) ) {
-		$item_data[] = array(
-			'key'   => 'Kuverter',
-			'value' => (string) absint( $data['covers'] ),
-		);
-	}
-
-	if ( ! empty( $data['included_names'] ) && is_array( $data['included_names'] ) ) {
-		$item_data[] = array(
-			'key'   => 'Indhold',
-			'value' => implode( ', ', $data['included_names'] ),
-		);
-	}
-
-	if ( ! empty( $data['selected_addons'] ) && is_array( $data['selected_addons'] ) ) {
-		$addon_lines = array();
-
-		foreach ( $data['selected_addons'] as $addon ) {
-			$addon_lines[] = $addon['name'] . ' × ' . absint( $addon['qty'] );
-		}
-
-		$item_data[] = array(
-			'key'   => 'Tilvalg',
-			'value' => implode( ', ', $addon_lines ),
-		);
-	}
-
-	if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) && ! empty( $data['service_data']['label'] ) ) {
-		$item_data[] = array(
-			'key'   => 'Service',
-			'value' => $data['service_data']['label'],
-		);
-	}
-
-	return $item_data;
+	return array();
 }
 
+/**
+ * Render cleaner menu details below product name in cart/checkout/mini-cart.
+ */
+add_filter( 'woocommerce_cart_item_name', 'cmbwc_render_cart_item_name_block', 20, 3 );
+
+function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
+	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
+		return $product_name;
+	}
+
+	$data = $cart_item['cmbwc_data'];
+
+	ob_start();
+	?>
+	<div class="cmbwc-cart-meta">
+		<?php if ( ! empty( $data['covers'] ) ) : ?>
+			<div class="cmbwc-cart-row">
+				<span class="cmbwc-cart-label">Kuverter:</span>
+				<span class="cmbwc-cart-value"><?php echo esc_html( absint( $data['covers'] ) ); ?></span>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $data['included_names'] ) && is_array( $data['included_names'] ) ) : ?>
+			<div class="cmbwc-cart-group">
+				<div class="cmbwc-cart-group-title">Indhold</div>
+				<ul class="cmbwc-cart-list">
+					<?php foreach ( $data['included_names'] as $name ) : ?>
+						<li><?php echo esc_html( $name ); ?></li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $data['selected_addons'] ) && is_array( $data['selected_addons'] ) ) : ?>
+			<div class="cmbwc-cart-group">
+				<div class="cmbwc-cart-group-title">Tilvalg</div>
+				<ul class="cmbwc-cart-list">
+					<?php foreach ( $data['selected_addons'] as $addon ) : ?>
+						<li>
+							<?php echo esc_html( $addon['name'] ); ?>
+							<?php echo esc_html( ' × ' . absint( $addon['qty'] ) ); ?>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) && ! empty( $data['service_data']['label'] ) ) : ?>
+			<div class="cmbwc-cart-group">
+				<div class="cmbwc-cart-group-title">Service</div>
+				<div class="cmbwc-cart-service"><?php echo esc_html( $data['service_data']['label'] ); ?></div>
+			</div>
+		<?php endif; ?>
+	</div>
+	<?php
+
+	return $product_name . ob_get_clean();
+}
+
+/**
+ * Keep cart line quantity at 1 and move all pricing into line total.
+ */
 add_action( 'woocommerce_before_calculate_totals', 'cmbwc_before_calculate_totals', 100 );
 
 function cmbwc_before_calculate_totals( $cart ) {
