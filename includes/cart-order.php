@@ -235,9 +235,7 @@ function cmbwc_get_cart_meta_html( $data ) {
 				<div class="cmbwc-cart-group-title">Tilvalg</div>
 				<ul class="cmbwc-cart-list">
 					<?php foreach ( $data['selected_addons'] as $addon ) : ?>
-						<li>
-							<?php echo esc_html( absint( $addon['qty'] ) . ' x ' . $addon['name'] ); ?>
-						</li>
+						<li><?php echo esc_html( absint( $addon['qty'] ) . ' x ' . $addon['name'] ); ?></li>
 					<?php endforeach; ?>
 				</ul>
 			</div>
@@ -257,6 +255,19 @@ function cmbwc_get_cart_meta_html( $data ) {
 add_filter( 'woocommerce_cart_item_name', 'cmbwc_render_cart_item_name_block', 20, 3 );
 
 function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
+	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
+		return $product_name;
+	}
+
+	return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
+}
+
+/**
+ * Mini-cart / widget fallback: force same meta block into item name.
+ */
+add_filter( 'widget_cart_item_name', 'cmbwc_render_widget_cart_item_name_block', 20, 3 );
+
+function cmbwc_render_widget_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
 	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
 		return $product_name;
 	}
