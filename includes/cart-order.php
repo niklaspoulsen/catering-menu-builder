@@ -236,8 +236,7 @@ function cmbwc_get_cart_meta_html( $data ) {
 				<ul class="cmbwc-cart-list">
 					<?php foreach ( $data['selected_addons'] as $addon ) : ?>
 						<li>
-							<?php echo esc_html( $addon['name'] ); ?>
-							<?php echo esc_html( ' × ' . absint( $addon['qty'] ) ); ?>
+							<?php echo esc_html( absint( $addon['qty'] ) . ' x ' . $addon['name'] ); ?>
 						</li>
 					<?php endforeach; ?>
 				</ul>
@@ -280,10 +279,6 @@ function cmbwc_widget_cart_item_quantity( $html, $cart_item, $cart_item_key ) {
 		if ( ! empty( $cart_item['line_tax'] ) ) {
 			$line_total += (float) $cart_item['line_tax'];
 		}
-	}
-
-	if ( $line_total <= 0 && ! empty( WC()->cart ) && ! empty( $cart_item['data'] ) && is_a( $cart_item['data'], 'WC_Product' ) ) {
-		$line_total = (float) WC()->cart->get_product_price( $cart_item['data'] );
 	}
 
 	return '<span class="quantity cmbwc-mini-cart-quantity">Samlet: ' . wc_price( $line_total ) . '</span>';
@@ -368,7 +363,7 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 		$addon_lines = array();
 
 		foreach ( $data['selected_addons'] as $addon ) {
-			$addon_lines[] = $addon['name'] . ' × ' . absint( $addon['qty'] );
+			$addon_lines[] = absint( $addon['qty'] ) . ' x ' . $addon['name'];
 		}
 
 		$item->add_meta_data( 'Tilvalg', implode( "\n", $addon_lines ) );
