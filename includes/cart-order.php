@@ -200,7 +200,6 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 
 /**
  * Hide default WooCommerce meta rendering for our menu lines.
- * We render a cleaner block under the product name instead.
  */
 add_filter( 'woocommerce_get_item_data', 'cmbwc_hide_default_item_data', 10, 2 );
 
@@ -212,18 +211,7 @@ function cmbwc_hide_default_item_data( $item_data, $cart_item ) {
 	return array();
 }
 
-/**
- * Render cleaner menu details below product name in cart/checkout/mini-cart.
- */
-add_filter( 'woocommerce_cart_item_name', 'cmbwc_render_cart_item_name_block', 20, 3 );
-
-function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
-	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
-		return $product_name;
-	}
-
-	$data = $cart_item['cmbwc_data'];
-
+function cmbwc_get_cart_meta_html( $data ) {
 	ob_start();
 	?>
 	<div class="cmbwc-cart-meta">
@@ -267,8 +255,39 @@ function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_ite
 		<?php endif; ?>
 	</div>
 	<?php
+	return ob_get_clean();
+}
 
-	return $product_name . ob_get_clean();
+/**
+ * Render cleaner menu details below product name in cart/checkout/mini-cart.
+ */
+add_filter( 'woocommerce_cart_item_name', 'cmbwc_render_cart_item_name_block', 20, 3 );
+
+function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
+	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
+		return $product_name;
+	}
+
+	return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
+}
+
+/**
+ * Mini-cart: replace "1 × 150,00 kr." with total line price.
+ */
+add_filter( 'woocommerce_widget_cart_item_quantity', 'cmbwc_widget_cart_item_quantity', 20, 3 );
+
+function cmbwc_widget_cart_item_quantity( $html, $cart_item, $cart_item_key ) {
+	if ( empty( $cart_item['cmbwc_data'] ) || ! is_array( $cart_item['cmbwc_data'] ) ) {
+		return $html;
+	}
+
+	if ( empty( WC()->cart ) || empty( $cart_item['data'] ) || ! is_a( $cart_item['data'], 'WC_Product' ) ) {
+		return $html;
+	}
+
+	$subtotal = WC()->cart->get_product_subtotal( $cart_item['data'], 1 );
+
+	return '<span class="quantity cmbwc-mini-cart-quantity">Samlet: ' . wp_kses_post( $subtotal ) . '</span>';
 }
 
 /**
@@ -328,6 +347,9 @@ function cmbwc_before_calculate_totals( $cart ) {
 	}
 }
 
+/**
+ * Save order item meta in a cleaner multiline format.
+ */
 add_action( 'woocommerce_checkout_create_order_line_item', 'cmbwc_add_order_item_meta', 10, 4 );
 
 function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
@@ -342,7 +364,7 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 	}
 
 	if ( ! empty( $data['included_names'] ) && is_array( $data['included_names'] ) ) {
-		$item->add_meta_data( 'Indhold', implode( ', ', $data['included_names'] ) );
+		$item->add_meta_data( 'Indhold', implode( "\n", $data['included_names'] ) );
 	}
 
 	if ( ! empty( $data['selected_addons'] ) && is_array( $data['selected_addons'] ) ) {
@@ -352,10 +374,46 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 			$addon_lines[] = $addon['name'] . ' × ' . absint( $addon['qty'] );
 		}
 
-		$item->add_meta_data( 'Tilvalg', implode( ', ', $addon_lines ) );
+		$item->add_meta_data( 'Tilvalg', implode( "\n", $addon_lines ) );
 	}
 
 	if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) && ! empty( $data['service_data']['label'] ) ) {
 		$item->add_meta_data( 'Service', $data['service_data']['label'] );
 	}
+}
+
+/**
+ * Format order item meta better in admin/order displays.
+ */
+add_filter( 'woocommerce_order_item_display_meta_value', 'cmbwc_format_order_item_meta_value', 20, 3 );
+
+function cmbwc_format_order_item_meta_value( $display_value, $meta, $item ) {
+	$key = isset( $meta->key ) ? $meta->key : '';
+
+	if ( in_array( $key, array( 'Indhold', 'Tilvalg' ), true ) ) {
+		$value = isset( $meta->value ) ? (string) $meta->value : '';
+		$lines = array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', $value ) ) );
+
+		if ( empty( $lines ) ) {
+			return $display_value;
+		}
+
+		$html = '<ul class="cmbwc-order-meta-list">';
+
+		foreach ( $lines as $line ) {
+			$html .= '<li>' . esc_html( $line ) . '</li>';
+		}
+
+		$html .= '</ul>';
+
+		return wp_kses(
+			$html,
+			array(
+				'ul' => array( 'class' => true ),
+				'li' => array(),
+			)
+		);
+	}
+
+	return $display_value;
 }
