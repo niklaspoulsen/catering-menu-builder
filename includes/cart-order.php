@@ -198,9 +198,6 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 	return $cart_item;
 }
 
-/**
- * Hide default WooCommerce meta rendering for our menu lines.
- */
 add_filter( 'woocommerce_get_item_data', 'cmbwc_hide_default_item_data', 10, 2 );
 
 function cmbwc_hide_default_item_data( $item_data, $cart_item ) {
@@ -258,9 +255,6 @@ function cmbwc_get_cart_meta_html( $data ) {
 	return ob_get_clean();
 }
 
-/**
- * Render cleaner menu details below product name in cart/checkout/mini-cart.
- */
 add_filter( 'woocommerce_cart_item_name', 'cmbwc_render_cart_item_name_block', 20, 3 );
 
 function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
@@ -271,9 +265,6 @@ function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_ite
 	return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
 }
 
-/**
- * Mini-cart: replace "1 × 150,00 kr." with total line price.
- */
 add_filter( 'woocommerce_widget_cart_item_quantity', 'cmbwc_widget_cart_item_quantity', 20, 3 );
 
 function cmbwc_widget_cart_item_quantity( $html, $cart_item, $cart_item_key ) {
@@ -281,18 +272,23 @@ function cmbwc_widget_cart_item_quantity( $html, $cart_item, $cart_item_key ) {
 		return $html;
 	}
 
-	if ( empty( WC()->cart ) || empty( $cart_item['data'] ) || ! is_a( $cart_item['data'], 'WC_Product' ) ) {
-		return $html;
+	$line_total = 0;
+
+	if ( isset( $cart_item['line_total'] ) ) {
+		$line_total = (float) $cart_item['line_total'];
+
+		if ( ! empty( $cart_item['line_tax'] ) ) {
+			$line_total += (float) $cart_item['line_tax'];
+		}
 	}
 
-	$subtotal = WC()->cart->get_product_subtotal( $cart_item['data'], 1 );
+	if ( $line_total <= 0 && ! empty( WC()->cart ) && ! empty( $cart_item['data'] ) && is_a( $cart_item['data'], 'WC_Product' ) ) {
+		$line_total = (float) WC()->cart->get_product_price( $cart_item['data'] );
+	}
 
-	return '<span class="quantity cmbwc-mini-cart-quantity">Samlet: ' . wp_kses_post( $subtotal ) . '</span>';
+	return '<span class="quantity cmbwc-mini-cart-quantity">Samlet: ' . wc_price( $line_total ) . '</span>';
 }
 
-/**
- * Keep cart line quantity at 1 and move all pricing into line total.
- */
 add_action( 'woocommerce_before_calculate_totals', 'cmbwc_before_calculate_totals', 100 );
 
 function cmbwc_before_calculate_totals( $cart ) {
@@ -316,8 +312,12 @@ function cmbwc_before_calculate_totals( $cart ) {
 		$data    = $cart_item['cmbwc_data'];
 		$product = $cart_item['data'];
 
-		$base_price = (float) $product->get_price();
-		$covers     = ! empty( $data['covers'] ) ? absint( $data['covers'] ) : 1;
+		$base_price = (float) $product->get_regular_price();
+		if ( $base_price <= 0 ) {
+			$base_price = (float) $product->get_price();
+		}
+
+		$covers = ! empty( $data['covers'] ) ? absint( $data['covers'] ) : 1;
 
 		$addons_total = 0;
 		if ( ! empty( $data['selected_addons'] ) && is_array( $data['selected_addons'] ) ) {
@@ -347,9 +347,6 @@ function cmbwc_before_calculate_totals( $cart ) {
 	}
 }
 
-/**
- * Save order item meta in a cleaner multiline format.
- */
 add_action( 'woocommerce_checkout_create_order_line_item', 'cmbwc_add_order_item_meta', 10, 4 );
 
 function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
@@ -382,9 +379,6 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 	}
 }
 
-/**
- * Format order item meta better in admin/order displays.
- */
 add_filter( 'woocommerce_order_item_display_meta_value', 'cmbwc_format_order_item_meta_value', 20, 3 );
 
 function cmbwc_format_order_item_meta_value( $display_value, $meta, $item ) {
