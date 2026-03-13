@@ -327,14 +327,14 @@ body {
 
 	<div class="section-title">Pris</div>
 	<div class="totals">
-		<?php if ( ! empty( $data['deposit_items'] ) ) : ?>
-			<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
-				<div class="total-row">
-					<span><?php echo esc_html( $deposit_item['name'] ); ?></span>
-					<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['line_total'], $order ) ); ?></span>
-				</div>
-			<?php endforeach; ?>
-		<?php endif; ?>
+    <?php if ( ! empty( $data['deposit_items'] ) ) : ?>
+    	<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
+    		<div class="total-row">
+    			<span><?php echo esc_html( $deposit_item['name'] ); ?></span>
+    			<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['amount'], $order ) ); ?></span>
+    		</div>
+    	<?php endforeach; ?>
+    <?php endif; ?>
 
 		<div class="total-row grand">
 			<span>Total</span>

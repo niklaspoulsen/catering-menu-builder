@@ -85,36 +85,46 @@ function cmbwc_bon_price( $amount, $order = null ) {
 }
 
 /**
- * Finder depositumlinjer.
+ * Udregner evt. service/depositum-linje fra en ordrelinje.
+ *
+ * Vigtigt:
+ * Depositum ligger som meta på SELVE menulinjen.
+ * Derfor må vi ikke tolke hele produktlinjen som depositum.
+ * I stedet udleder vi en separat prislinje til bonens bund.
  */
-function cmbwc_bon_is_deposit_item( $item ) {
+function cmbwc_bon_get_deposit_line_from_item( $item ) {
 	if ( ! $item || ! is_a( $item, 'WC_Order_Item_Product' ) ) {
-		return false;
+		return null;
 	}
 
-	$service_deposit = $item->get_meta( '_cmbwc_service_is_deposit', true );
-	if ( in_array( $service_deposit, array( 'yes', '1', 1, true, 'true' ), true ) ) {
-		return true;
+	$is_deposit = $item->get_meta( '_cmbwc_service_is_deposit', true );
+	if ( ! in_array( $is_deposit, array( 'yes', '1', 1, true, 'true' ), true ) ) {
+		return null;
 	}
 
-	$name = function_exists( 'mb_strtolower' )
-		? mb_strtolower( trim( (string) $item->get_name() ) )
-		: strtolower( trim( (string) $item->get_name() ) );
+	$service_label = trim( (string) $item->get_meta( 'Service', true ) );
+	$service_price = (float) $item->get_meta( '_cmbwc_service_price', true );
+	$price_type    = trim( (string) $item->get_meta( '_cmbwc_service_price_type', true ) );
+	$covers        = absint( $item->get_meta( 'Kuverter', true ) );
 
-	$keywords = array(
-		'depositum',
-		'pant',
-		'service depositum',
-		'emballage depositum',
+	if ( '' === $service_label ) {
+		$service_label = 'Depositum';
+	}
+
+	if ( $service_price <= 0 ) {
+		return null;
+	}
+
+	$amount = $service_price;
+
+	if ( 'per_cover' === $price_type ) {
+		$amount = $service_price * max( 1, $covers );
+	}
+
+	return array(
+		'name'   => $service_label,
+		'amount' => (float) $amount,
 	);
-
-	foreach ( $keywords as $keyword ) {
-		if ( false !== strpos( $name, $keyword ) ) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 /**
@@ -137,8 +147,7 @@ function cmbwc_get_order_bon_data( $order ) {
 			continue;
 		}
 
-		$is_deposit = cmbwc_bon_is_deposit_item( $item );
-
+		// Produktlinjen skal ALTID blive i produktionen.
 		$item_data = array(
 			'name'       => $item->get_name(),
 			'qty'        => (int) $item->get_quantity(),
@@ -149,10 +158,12 @@ function cmbwc_get_order_bon_data( $order ) {
 			'line_total' => (float) $item->get_total() + (float) $item->get_total_tax(),
 		);
 
-		if ( $is_deposit ) {
-			$deposit_items[] = $item_data;
-		} else {
-			$items[] = $item_data;
+		$items[] = $item_data;
+
+		// Separat depositumlinje til prissektionen.
+		$deposit_line = cmbwc_bon_get_deposit_line_from_item( $item );
+		if ( ! empty( $deposit_line ) ) {
+			$deposit_items[] = $deposit_line;
 		}
 	}
 
