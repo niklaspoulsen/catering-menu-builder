@@ -12,11 +12,11 @@ function cmbwc_bon_split_lines( $value ) {
 	$value = trim( (string) $value );
 
 	if ( '' === $value ) {
-		return [];
+		return array();
 	}
 
 	$lines = preg_split( '/\r\n|\r|\n/', $value );
-	$clean = [];
+	$clean = array();
 
 	foreach ( $lines as $line ) {
 		$line = trim( $line );
@@ -25,20 +25,50 @@ function cmbwc_bon_split_lines( $value ) {
 			continue;
 		}
 
-		if ( strpos( $line, ',' ) !== false ) {
+		if ( false !== strpos( $line, ',' ) ) {
 			$parts = array_map( 'trim', explode( ',', $line ) );
 
 			foreach ( $parts as $part ) {
+				$part = cmbwc_bon_normalize_qty_prefix( $part );
+
 				if ( '' !== $part ) {
 					$clean[] = $part;
 				}
 			}
 		} else {
-			$clean[] = $line;
+			$clean[] = cmbwc_bon_normalize_qty_prefix( $line );
 		}
 	}
 
 	return array_values( array_filter( $clean ) );
+}
+
+/**
+ * Sørger for at antal altid står som "2 x Varenavn".
+ */
+function cmbwc_bon_normalize_qty_prefix( $text ) {
+	$text = trim( (string) $text );
+
+	if ( '' === $text ) {
+		return '';
+	}
+
+	// Allerede korrekt format: "2 x Noget"
+	if ( preg_match( '/^\d+\s*x\s+/i', $text ) ) {
+		return $text;
+	}
+
+	// Format: "Noget x 2" -> "2 x Noget"
+	if ( preg_match( '/^(.*?)\s*x\s*(\d+)$/i', $text, $matches ) ) {
+		$name = trim( $matches[1] );
+		$qty  = absint( $matches[2] );
+
+		if ( $qty > 0 && '' !== $name ) {
+			return $qty . ' x ' . $name;
+		}
+	}
+
+	return $text;
 }
 
 /**
@@ -48,7 +78,7 @@ function cmbwc_bon_price( $amount, $order = null ) {
 	$amount = (float) $amount;
 
 	if ( $order && is_a( $order, 'WC_Order' ) ) {
-		return wc_price( $amount, [ 'currency' => $order->get_currency() ] );
+		return wc_price( $amount, array( 'currency' => $order->get_currency() ) );
 	}
 
 	return wc_price( $amount );
@@ -56,38 +86,30 @@ function cmbwc_bon_price( $amount, $order = null ) {
 
 /**
  * Finder depositumlinjer.
- * Vi prøver både på produktnavn og meta.
  */
 function cmbwc_bon_is_deposit_item( $item ) {
 	if ( ! $item || ! is_a( $item, 'WC_Order_Item_Product' ) ) {
 		return false;
 	}
 
-	$name = mb_strtolower( trim( (string) $item->get_name() ) );
+	$service_deposit = $item->get_meta( '_cmbwc_service_is_deposit', true );
+	if ( in_array( $service_deposit, array( 'yes', '1', 1, true, 'true' ), true ) ) {
+		return true;
+	}
 
-	$keywords = [
+	$name = function_exists( 'mb_strtolower' )
+		? mb_strtolower( trim( (string) $item->get_name() ) )
+		: strtolower( trim( (string) $item->get_name() ) );
+
+	$keywords = array(
 		'depositum',
 		'pant',
 		'service depositum',
 		'emballage depositum',
-	];
+	);
 
 	foreach ( $keywords as $keyword ) {
 		if ( false !== strpos( $name, $keyword ) ) {
-			return true;
-		}
-	}
-
-	$meta_checks = [
-		'_cmbwc_is_deposit',
-		'_is_deposit',
-		'depositum',
-	];
-
-	foreach ( $meta_checks as $meta_key ) {
-		$meta_value = $item->get_meta( $meta_key, true );
-
-		if ( in_array( $meta_value, [ '1', 1, 'yes', 'true', true ], true ) ) {
 			return true;
 		}
 	}
@@ -104,11 +126,11 @@ function cmbwc_get_order_bon_data( $order ) {
 	}
 
 	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
-		return [];
+		return array();
 	}
 
-	$items          = [];
-	$deposit_items  = [];
+	$items         = array();
+	$deposit_items = array();
 
 	foreach ( $order->get_items() as $item_id => $item ) {
 		if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
@@ -117,7 +139,7 @@ function cmbwc_get_order_bon_data( $order ) {
 
 		$is_deposit = cmbwc_bon_is_deposit_item( $item );
 
-		$item_data = [
+		$item_data = array(
 			'name'       => $item->get_name(),
 			'qty'        => (int) $item->get_quantity(),
 			'covers'     => $item->get_meta( 'Kuverter', true ),
@@ -125,7 +147,7 @@ function cmbwc_get_order_bon_data( $order ) {
 			'addons'     => cmbwc_bon_split_lines( $item->get_meta( 'Tilvalg', true ) ),
 			'service'    => $item->get_meta( 'Service', true ),
 			'line_total' => (float) $item->get_total() + (float) $item->get_total_tax(),
-		];
+		);
 
 		if ( $is_deposit ) {
 			$deposit_items[] = $item_data;
@@ -144,28 +166,28 @@ function cmbwc_get_order_bon_data( $order ) {
 		$shipping_address = $order->get_formatted_billing_address();
 	}
 
-	return [
-		'order_id'          => $order->get_id(),
-		'order_number'      => $order->get_order_number(),
-		'created'           => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
-		'delivery_date'     => (string) $order->get_meta( '_delivery_date' ),
-		'delivery_time'     => (string) $order->get_meta( '_delivery_time' ),
-		'customer'          => $customer,
-		'company'           => (string) $order->get_billing_company(),
-		'phone'             => (string) $order->get_billing_phone(),
-		'shipping_method'   => (string) $order->get_shipping_method(),
-		'shipping_address'  => $shipping_address,
-		'payment_method'    => (string) $order->get_payment_method_title(),
-		'order_note'        => (string) $order->get_customer_note(),
-		'subtotal'          => (float) $order->get_subtotal(),
-		'shipping_total'    => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-		'fees_total'        => (float) $order->get_total_fees(),
-		'total_tax'         => (float) $order->get_total_tax(),
-		'discount_total'    => (float) $order->get_discount_total(),
-		'grand_total'       => (float) $order->get_total(),
-		'items'             => $items,
-		'deposit_items'     => $deposit_items,
-	];
+	return array(
+		'order_id'         => $order->get_id(),
+		'order_number'     => $order->get_order_number(),
+		'created'          => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
+		'delivery_date'    => (string) $order->get_meta( '_delivery_date' ),
+		'delivery_time'    => (string) $order->get_meta( '_delivery_time' ),
+		'customer'         => $customer,
+		'company'          => (string) $order->get_billing_company(),
+		'phone'            => (string) $order->get_billing_phone(),
+		'shipping_method'  => (string) $order->get_shipping_method(),
+		'shipping_address' => $shipping_address,
+		'payment_method'   => (string) $order->get_payment_method_title(),
+		'order_note'       => (string) $order->get_customer_note(),
+		'subtotal'         => (float) $order->get_subtotal(),
+		'shipping_total'   => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+		'fees_total'       => (float) $order->get_total_fees(),
+		'total_tax'        => (float) $order->get_total_tax(),
+		'discount_total'   => (float) $order->get_discount_total(),
+		'grand_total'      => (float) $order->get_total(),
+		'items'            => $items,
+		'deposit_items'    => $deposit_items,
+	);
 }
 
 /**
@@ -257,8 +279,6 @@ function cmbwc_preview_bon_page() {
 
 /**
  * Knapper i ordrelisten.
- * Bemærk: target virker ikke altid i WooCommerce's renderer,
- * men vi sætter det på hvor muligt.
  */
 add_filter( 'woocommerce_admin_order_actions', 'cmbwc_add_list_table_order_actions', 20, 2 );
 
@@ -277,18 +297,18 @@ function cmbwc_add_list_table_order_actions( $actions, $order ) {
 		'cmbwc_manual_print_bon_' . $order->get_id()
 	);
 
-	$actions['cmbwc_preview_bon'] = [
+	$actions['cmbwc_preview_bon'] = array(
 		'url'    => $preview_url,
 		'name'   => 'Vis BON',
 		'action' => 'view cmbwc-preview-bon',
 		'target' => '_blank',
-	];
+	);
 
-	$actions['cmbwc_print_bon'] = [
+	$actions['cmbwc_print_bon'] = array(
 		'url'    => $print_url,
 		'name'   => 'Print BON',
 		'action' => 'processing cmbwc-print-bon',
-	];
+	);
 
 	return $actions;
 }
@@ -323,7 +343,6 @@ function cmbwc_manual_print_bon_handler() {
 
 /**
  * Rigtig preview-knap på ordresiden.
- * Denne åbner i ny fane.
  */
 add_action( 'woocommerce_order_item_add_action_buttons', 'cmbwc_add_preview_button_on_order_edit' );
 

@@ -43,29 +43,6 @@ function cmbwc_get_public_products_grouped_by_category() {
 	return $grouped;
 }
 
-function cmbwc_get_service_options() {
-	$service_options = get_option( 'cmbwc_service_options', array() );
-
-	if ( empty( $service_options ) || ! is_array( $service_options ) ) {
-		$service_options = array(
-			'tray_glass' => array(
-				'label'      => 'Træfad & glas skåle',
-				'price'      => 200,
-				'price_type' => 'fixed',
-			),
-			'disposable' => array(
-				'label'      => 'Engangsfad & -skåle',
-				'price'      => 4,
-				'price_type' => 'per_cover',
-			),
-		);
-
-		update_option( 'cmbwc_service_options', $service_options );
-	}
-
-	return $service_options;
-}
-
 function cmbwc_render_product_picker_group( $title, $product_ids, $selected_ids, $field_name ) {
 	?>
 	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:8px; background:#fff;">
@@ -222,7 +199,7 @@ function cmbwc_render_product_metabox( $post ) {
 	}
 
 	$grouped_products = cmbwc_get_public_products_grouped_by_category();
-	$service_options  = cmbwc_get_service_options();
+	$service_options  = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
 
 	wp_nonce_field( 'cmbwc_save_metabox', 'cmbwc_metabox_nonce' );
 	?>
@@ -263,32 +240,40 @@ function cmbwc_render_product_metabox( $post ) {
 
 		<h2 style="margin:32px 0 12px;">Service / anretning</h2>
 		<div style="border:1px solid #ddd; border-radius:8px; background:#fff; padding:14px;">
-			<?php foreach ( $service_options as $service_key => $service_data ) : ?>
-				<?php
-				$label      = isset( $service_data['label'] ) ? $service_data['label'] : $service_key;
-				$price      = isset( $service_data['price'] ) ? (float) $service_data['price'] : 0;
-				$price_type = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
-				?>
-				<p style="margin:0 0 10px;">
-					<label>
-						<input
-							type="checkbox"
-							name="_cmbwc_service_allowed[]"
-							value="<?php echo esc_attr( $service_key ); ?>"
-							<?php checked( in_array( $service_key, $service_allowed, true ) ); ?>
-						>
-						<?php echo esc_html( $label ); ?>
-						—
-						<?php
-						echo wp_kses_post(
-							'fixed' === $price_type
-								? wc_price( $price )
-								: wc_price( $price ) . ' pr. kuvert'
-						);
-						?>
-					</label>
-				</p>
-			<?php endforeach; ?>
+			<?php if ( ! empty( $service_options ) ) : ?>
+				<?php foreach ( $service_options as $service_key => $service_data ) : ?>
+					<?php
+					$label      = isset( $service_data['label'] ) ? $service_data['label'] : $service_key;
+					$price      = isset( $service_data['price'] ) ? (float) $service_data['price'] : 0;
+					$price_type = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
+					$is_deposit = isset( $service_data['is_deposit'] ) ? $service_data['is_deposit'] : 'no';
+					?>
+					<p style="margin:0 0 10px;">
+						<label>
+							<input
+								type="checkbox"
+								name="_cmbwc_service_allowed[]"
+								value="<?php echo esc_attr( $service_key ); ?>"
+								<?php checked( in_array( $service_key, $service_allowed, true ) ); ?>
+							>
+							<?php echo esc_html( $label ); ?>
+							—
+							<?php
+							echo wp_kses_post(
+								'fixed' === $price_type
+									? wc_price( $price )
+									: wc_price( $price ) . ' pr. kuvert'
+							);
+							?>
+							<?php if ( 'yes' === $is_deposit ) : ?>
+								<strong>(depositum)</strong>
+							<?php endif; ?>
+						</label>
+					</p>
+				<?php endforeach; ?>
+			<?php else : ?>
+				<p>Ingen servicevalg fundet endnu. Opret dem under Catering → Servicevalg.</p>
+			<?php endif; ?>
 		</div>
 	</div>
 	<?php

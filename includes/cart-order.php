@@ -4,16 +4,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-function cmbwc_get_service_option_by_key( $service_key ) {
-	$all = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
-
-	if ( empty( $all[ $service_key ] ) || ! is_array( $all[ $service_key ] ) ) {
-		return null;
-	}
-
-	return $all[ $service_key ];
-}
-
 function cmbwc_get_included_names_for_product( $product_id ) {
 	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
 
@@ -171,7 +161,10 @@ function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id )
 		$selected_service = '';
 	}
 
-	$service_data   = $selected_service ? cmbwc_get_service_option_by_key( $selected_service ) : null;
+	$service_data = $selected_service && function_exists( 'cmbwc_get_service_option_by_key' )
+		? cmbwc_get_service_option_by_key( $selected_service )
+		: null;
+
 	$included_names = cmbwc_get_included_names_for_product( $product_id );
 
 	$cart_item_data['cmbwc_data'] = array(
@@ -380,8 +373,23 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 		$item->add_meta_data( 'Tilvalg', implode( "\n", $addon_lines ) );
 	}
 
-	if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) && ! empty( $data['service_data']['label'] ) ) {
-		$item->add_meta_data( 'Service', $data['service_data']['label'] );
+	if ( ! empty( $data['selected_service'] ) ) {
+		$item->add_meta_data( '_cmbwc_service_key', sanitize_text_field( $data['selected_service'] ) );
+	}
+
+	if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) ) {
+		$service_label      = ! empty( $data['service_data']['label'] ) ? $data['service_data']['label'] : '';
+		$service_price      = isset( $data['service_data']['price'] ) ? (float) $data['service_data']['price'] : 0;
+		$service_price_type = ! empty( $data['service_data']['price_type'] ) ? $data['service_data']['price_type'] : 'fixed';
+		$service_deposit    = ! empty( $data['service_data']['is_deposit'] ) && 'yes' === $data['service_data']['is_deposit'] ? 'yes' : 'no';
+
+		if ( '' !== $service_label ) {
+			$item->add_meta_data( 'Service', $service_label );
+		}
+
+		$item->add_meta_data( '_cmbwc_service_price', $service_price );
+		$item->add_meta_data( '_cmbwc_service_price_type', $service_price_type );
+		$item->add_meta_data( '_cmbwc_service_is_deposit', $service_deposit );
 	}
 }
 
