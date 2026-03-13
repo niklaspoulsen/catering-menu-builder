@@ -113,9 +113,6 @@ function cmbwc_bon_format_delivery_date( $date_string ) {
 
 /**
  * Udregner evt. service/depositum-linje fra en ordrelinje.
- *
- * Depositum styres af service-metaen:
- * _cmbwc_service_is_deposit = yes
  */
 function cmbwc_bon_get_deposit_line_from_item( $item ) {
 	if ( ! $item || ! is_a( $item, 'WC_Order_Item_Product' ) ) {
@@ -151,6 +148,23 @@ function cmbwc_bon_get_deposit_line_from_item( $item ) {
 		'display_name' => $service_label . ' (Depositum)',
 		'amount'       => (float) $amount,
 	);
+}
+
+/**
+ * Print-status helpers.
+ */
+function cmbwc_is_order_bon_printed( $order_id ) {
+	return 'yes' === get_post_meta( $order_id, '_cmbwc_bon_printed', true );
+}
+
+function cmbwc_mark_order_bon_printed( $order_id ) {
+	update_post_meta( $order_id, '_cmbwc_bon_printed', 'yes' );
+	update_post_meta( $order_id, '_cmbwc_bon_printed_at', current_time( 'mysql' ) );
+}
+
+function cmbwc_unmark_order_bon_printed( $order_id ) {
+	delete_post_meta( $order_id, '_cmbwc_bon_printed' );
+	delete_post_meta( $order_id, '_cmbwc_bon_printed_at' );
 }
 
 /**
@@ -204,28 +218,28 @@ function cmbwc_get_order_bon_data( $order ) {
 	$delivery_date_raw = (string) $order->get_meta( '_delivery_date' );
 
 	return array(
-		'order_id'               => $order->get_id(),
-		'order_number'           => $order->get_order_number(),
-		'created'                => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
-		'delivery_date'          => $delivery_date_raw,
-		'delivery_date_formatted'=> cmbwc_bon_format_delivery_date( $delivery_date_raw ),
-		'delivery_time'          => (string) $order->get_meta( '_delivery_time' ),
-		'customer'               => $customer,
-		'company'                => (string) $order->get_billing_company(),
-		'phone'                  => (string) $order->get_billing_phone(),
-		'shipping_method'        => (string) $order->get_shipping_method(),
-		'shipping_address'       => $shipping_address,
-		'payment_method'         => (string) $order->get_payment_method_title(),
-		'order_note'             => (string) $order->get_customer_note(),
-		'subtotal'               => (float) $order->get_subtotal(),
-		'shipping_total'         => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-		'fees_total'             => (float) $order->get_total_fees(),
-		'total_tax'              => (float) $order->get_total_tax(),
-		'discount_total'         => (float) $order->get_discount_total(),
-		'grand_total'            => (float) $order->get_total(),
-		'items'                  => $items,
-		'deposit_items'          => $deposit_items,
-		'has_deposit'            => ! empty( $deposit_items ),
+		'order_id'                => $order->get_id(),
+		'order_number'            => $order->get_order_number(),
+		'created'                 => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
+		'delivery_date'           => $delivery_date_raw,
+		'delivery_date_formatted' => cmbwc_bon_format_delivery_date( $delivery_date_raw ),
+		'delivery_time'           => (string) $order->get_meta( '_delivery_time' ),
+		'customer'                => $customer,
+		'company'                 => (string) $order->get_billing_company(),
+		'phone'                   => (string) $order->get_billing_phone(),
+		'shipping_method'         => (string) $order->get_shipping_method(),
+		'shipping_address'        => $shipping_address,
+		'payment_method'          => (string) $order->get_payment_method_title(),
+		'order_note'              => (string) $order->get_customer_note(),
+		'subtotal'                => (float) $order->get_subtotal(),
+		'shipping_total'          => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+		'fees_total'              => (float) $order->get_total_fees(),
+		'total_tax'               => (float) $order->get_total_tax(),
+		'discount_total'          => (float) $order->get_discount_total(),
+		'grand_total'             => (float) $order->get_total(),
+		'items'                   => $items,
+		'deposit_items'           => $deposit_items,
+		'has_deposit'             => ! empty( $deposit_items ),
 	);
 }
 
@@ -297,6 +311,7 @@ function cmbwc_order_action_print_bon( $order ) {
 
 	if ( is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' ) ) {
 		$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order->get_id() );
+		cmbwc_mark_order_bon_printed( $order->get_id() );
 	}
 }
 
@@ -395,7 +410,7 @@ function cmbwc_force_order_list_preview_blank_target() {
 }
 
 /**
- * Manuel print fra ordrelisten.
+ * Manuel print fra ordrelisten / produktionsoverblik.
  */
 add_action( 'admin_post_cmbwc_manual_print_bon', 'cmbwc_manual_print_bon_handler' );
 
@@ -416,6 +431,7 @@ function cmbwc_manual_print_bon_handler() {
 
 	if ( is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' ) ) {
 		$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id );
+		cmbwc_mark_order_bon_printed( $order_id );
 	}
 
 	wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php?post_type=shop_order' ) );
