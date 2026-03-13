@@ -4,460 +4,717 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Splitter tekst til BON-linjer.
- *
- * Vigtigt:
- * Vi splitter KUN på linjeskift.
- * Ikke på komma, da nogle retter indeholder komma i navnet.
- */
-function cmbwc_bon_split_lines( $value ) {
-	$value = trim( (string) $value );
+if ( ! function_exists( 'cmbwc_normalize_delivery_date_to_ymd' ) ) {
+	function cmbwc_normalize_delivery_date_to_ymd( $date_string ) {
+		$date_string = trim( (string) $date_string );
 
-	if ( '' === $value ) {
-		return array();
-	}
-
-	$lines = preg_split( '/\r\n|\r|\n/', $value );
-	$clean = array();
-
-	foreach ( $lines as $line ) {
-		$line = trim( $line );
-
-		if ( '' === $line ) {
-			continue;
+		if ( '' === $date_string ) {
+			return '';
 		}
 
-		$clean[] = cmbwc_bon_normalize_qty_prefix( $line );
-	}
-
-	return array_values( array_filter( $clean ) );
-}
-
-/**
- * Sørger for at antal altid står som "2 x Varenavn".
- */
-function cmbwc_bon_normalize_qty_prefix( $text ) {
-	$text = trim( (string) $text );
-
-	if ( '' === $text ) {
-		return '';
-	}
-
-	if ( preg_match( '/^\d+\s*x\s+/i', $text ) ) {
-		return $text;
-	}
-
-	if ( preg_match( '/^(.*?)\s*x\s*(\d+)$/i', $text, $matches ) ) {
-		$name = trim( $matches[1] );
-		$qty  = absint( $matches[2] );
-
-		if ( $qty > 0 && '' !== $name ) {
-			return $qty . ' x ' . $name;
-		}
-	}
-
-	return $text;
-}
-
-/**
- * Formatter Woo-pris.
- */
-function cmbwc_bon_price( $amount, $order = null ) {
-	$amount = (float) $amount;
-
-	if ( $order && is_a( $order, 'WC_Order' ) ) {
-		return wc_price( $amount, array( 'currency' => $order->get_currency() ) );
-	}
-
-	return wc_price( $amount );
-}
-
-/**
- * Formater leveringdato pænt og tydeligt.
- * Eksempel: FREDAG D. 13/03 2026
- */
-function cmbwc_bon_format_delivery_date( $date_string ) {
-	$date_string = trim( (string) $date_string );
-
-	if ( '' === $date_string ) {
-		return '';
-	}
-
-	$timestamp = strtotime( $date_string );
-
-	if ( ! $timestamp ) {
-		return $date_string;
-	}
-
-	$day_name = wp_date( 'l', $timestamp );
-
-	$translations = array(
-		'Monday'    => 'MANDAG',
-		'Tuesday'   => 'TIRSDAG',
-		'Wednesday' => 'ONSDAG',
-		'Thursday'  => 'TORSDAG',
-		'Friday'    => 'FREDAG',
-		'Saturday'  => 'LØRDAG',
-		'Sunday'    => 'SØNDAG',
-	);
-
-	if ( isset( $translations[ $day_name ] ) ) {
-		$day_name = $translations[ $day_name ];
-	} else {
-		$day_name = strtoupper( $day_name );
-	}
-
-	return $day_name . ' D. ' . wp_date( 'd/m Y', $timestamp );
-}
-
-/**
- * Udregner evt. service/depositum-linje fra en ordrelinje.
- */
-function cmbwc_bon_get_deposit_line_from_item( $item ) {
-	if ( ! $item || ! is_a( $item, 'WC_Order_Item_Product' ) ) {
-		return null;
-	}
-
-	$is_deposit = $item->get_meta( '_cmbwc_service_is_deposit', true );
-	if ( ! in_array( $is_deposit, array( 'yes', '1', 1, true, 'true' ), true ) ) {
-		return null;
-	}
-
-	$service_label = trim( (string) $item->get_meta( 'Service', true ) );
-	$service_price = (float) $item->get_meta( '_cmbwc_service_price', true );
-	$price_type    = trim( (string) $item->get_meta( '_cmbwc_service_price_type', true ) );
-	$covers        = absint( $item->get_meta( 'Kuverter', true ) );
-
-	if ( '' === $service_label ) {
-		$service_label = 'Depositum';
-	}
-
-	if ( $service_price <= 0 ) {
-		return null;
-	}
-
-	$amount = $service_price;
-
-	if ( 'per_cover' === $price_type ) {
-		$amount = $service_price * max( 1, $covers );
-	}
-
-	return array(
-		'name'         => $service_label,
-		'display_name' => $service_label . ' (Depositum)',
-		'amount'       => (float) $amount,
-	);
-}
-
-/**
- * Print-status helpers.
- */
-function cmbwc_is_order_bon_printed( $order_id ) {
-	return 'yes' === get_post_meta( $order_id, '_cmbwc_bon_printed', true );
-}
-
-function cmbwc_mark_order_bon_printed( $order_id ) {
-	update_post_meta( $order_id, '_cmbwc_bon_printed', 'yes' );
-	update_post_meta( $order_id, '_cmbwc_bon_printed_at', current_time( 'mysql' ) );
-}
-
-function cmbwc_unmark_order_bon_printed( $order_id ) {
-	delete_post_meta( $order_id, '_cmbwc_bon_printed' );
-	delete_post_meta( $order_id, '_cmbwc_bon_printed_at' );
-}
-
-/**
- * Samler alle data til BON.
- */
-function cmbwc_get_order_bon_data( $order ) {
-	if ( is_numeric( $order ) ) {
-		$order = wc_get_order( $order );
-	}
-
-	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
-		return array();
-	}
-
-	$items         = array();
-	$deposit_items = array();
-
-	foreach ( $order->get_items() as $item_id => $item ) {
-		if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
-			continue;
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_string ) ) {
+			return $date_string;
 		}
 
-		$item_data = array(
-			'name'       => $item->get_name(),
-			'qty'        => (int) $item->get_quantity(),
-			'covers'     => $item->get_meta( 'Kuverter', true ),
-			'included'   => cmbwc_bon_split_lines( $item->get_meta( 'Indhold', true ) ),
-			'addons'     => cmbwc_bon_split_lines( $item->get_meta( 'Tilvalg', true ) ),
-			'service'    => $item->get_meta( 'Service', true ),
-			'line_total' => (float) $item->get_total() + (float) $item->get_total_tax(),
+		if ( preg_match( '/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/', $date_string, $matches ) ) {
+			$day   = str_pad( $matches[1], 2, '0', STR_PAD_LEFT );
+			$month = str_pad( $matches[2], 2, '0', STR_PAD_LEFT );
+			$year  = $matches[3];
+
+			return $year . '-' . $month . '-' . $day;
+		}
+
+		$timestamp = strtotime( $date_string );
+
+		if ( ! $timestamp ) {
+			return '';
+		}
+
+		return wp_date( 'Y-m-d', $timestamp );
+	}
+}
+
+if ( ! function_exists( 'cmbwc_get_production_date_label' ) ) {
+	function cmbwc_get_production_date_label( $delivery_date ) {
+		$delivery_date = trim( (string) $delivery_date );
+
+		if ( '' === $delivery_date ) {
+			return '';
+		}
+
+		if ( function_exists( 'cmbwc_bon_format_delivery_date' ) ) {
+			return cmbwc_bon_format_delivery_date( $delivery_date );
+		}
+
+		return $delivery_date;
+	}
+}
+
+if ( ! function_exists( 'cmbwc_get_production_preset_dates' ) ) {
+	function cmbwc_get_production_preset_dates( $preset ) {
+		$today_ts = current_time( 'timestamp' );
+		$today    = wp_date( 'Y-m-d', $today_ts );
+
+		switch ( $preset ) {
+			case 'today':
+				return array(
+					'date_from' => $today,
+					'date_to'   => $today,
+				);
+
+			case 'week':
+				$weekday = (int) wp_date( 'N', $today_ts );
+				$start   = strtotime( '-' . ( $weekday - 1 ) . ' days', $today_ts );
+				$end     = strtotime( '+6 days', $start );
+
+				return array(
+					'date_from' => wp_date( 'Y-m-d', $start ),
+					'date_to'   => wp_date( 'Y-m-d', $end ),
+				);
+
+			case 'month':
+				return array(
+					'date_from' => wp_date( 'Y-m-01', $today_ts ),
+					'date_to'   => wp_date( 'Y-m-t', $today_ts ),
+				);
+		}
+
+		return array(
+			'date_from' => $today,
+			'date_to'   => wp_date( 'Y-m-d', strtotime( '+14 days', $today_ts ) ),
+		);
+	}
+}
+
+if ( ! function_exists( 'cmbwc_get_production_sort_datetime' ) ) {
+	function cmbwc_get_production_sort_datetime( $delivery_date, $delivery_time, $order = null ) {
+		$delivery_date = trim( (string) $delivery_date );
+		$delivery_time = trim( (string) $delivery_time );
+
+		if ( '' === $delivery_date ) {
+			return 0;
+		}
+
+		$date_part = $delivery_date;
+
+		if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_part ) ) {
+			$date_part = cmbwc_normalize_delivery_date_to_ymd( $date_part );
+		}
+
+		if ( '' === $date_part ) {
+			return 0;
+		}
+
+		$time_part = '23:59';
+
+		if ( preg_match( '/^\d{1,2}:\d{2}$/', $delivery_time ) ) {
+			$time_part = $delivery_time;
+		}
+
+		$timestamp = strtotime( $date_part . ' ' . $time_part );
+
+		if ( $timestamp ) {
+			return $timestamp;
+		}
+
+		if ( $order && $order->get_date_created() ) {
+			return $order->get_date_created()->getTimestamp();
+		}
+
+		return 0;
+	}
+}
+
+if ( ! function_exists( 'cmbwc_sort_production_rows' ) ) {
+	function cmbwc_sort_production_rows( $a, $b ) {
+		$a_sort = isset( $a['delivery_sort'] ) ? (int) $a['delivery_sort'] : 0;
+		$b_sort = isset( $b['delivery_sort'] ) ? (int) $b['delivery_sort'] : 0;
+
+		if ( $a_sort === $b_sort ) {
+			$a_created = isset( $a['created_sort'] ) ? (int) $a['created_sort'] : 0;
+			$b_created = isset( $b['created_sort'] ) ? (int) $b['created_sort'] : 0;
+
+			if ( $a_created === $b_created ) {
+				return 0;
+			}
+
+			return ( $a_created < $b_created ) ? -1 : 1;
+		}
+
+		return ( $a_sort < $b_sort ) ? -1 : 1;
+	}
+}
+
+if ( ! function_exists( 'cmbwc_group_production_rows_by_date' ) ) {
+	function cmbwc_group_production_rows_by_date( $rows ) {
+		$grouped = array();
+
+		foreach ( $rows as $row ) {
+			$key = ! empty( $row['delivery_date_ymd'] ) ? $row['delivery_date_ymd'] : 'unknown';
+
+			if ( ! isset( $grouped[ $key ] ) ) {
+				$grouped[ $key ] = array(
+					'label'        => ! empty( $row['delivery_date_label'] ) ? $row['delivery_date_label'] : $row['delivery_date'],
+					'rows'         => array(),
+					'covers_total' => 0,
+				);
+			}
+
+			$grouped[ $key ]['rows'][] = $row;
+			$grouped[ $key ]['covers_total'] += isset( $row['covers_total'] ) ? (int) $row['covers_total'] : 0;
+		}
+
+		return $grouped;
+	}
+}
+
+if ( ! function_exists( 'cmbwc_get_order_delivery_type_label' ) ) {
+	function cmbwc_get_order_delivery_type_label( $order ) {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return '-';
+		}
+
+		$method_title = trim( (string) $order->get_shipping_method() );
+
+		if ( '' === $method_title ) {
+			return 'Afhent selv';
+		}
+
+		$normalized = function_exists( 'mb_strtolower' ) ? mb_strtolower( $method_title ) : strtolower( $method_title );
+
+		$pickup_keywords = array(
+			'local pickup',
+			'pickup',
+			'afhent',
+			'afhentning',
 		);
 
-		$items[] = $item_data;
-
-		$deposit_line = cmbwc_bon_get_deposit_line_from_item( $item );
-		if ( ! empty( $deposit_line ) ) {
-			$deposit_items[] = $deposit_line;
+		foreach ( $pickup_keywords as $keyword ) {
+			if ( false !== strpos( $normalized, $keyword ) ) {
+				return 'Afhent selv';
+			}
 		}
-	}
 
-	$customer = trim( $order->get_formatted_billing_full_name() );
-	if ( '' === $customer ) {
-		$customer = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
-	}
-
-	$shipping_address = $order->get_formatted_shipping_address();
-	if ( '' === trim( wp_strip_all_tags( $shipping_address ) ) ) {
-		$shipping_address = $order->get_formatted_billing_address();
-	}
-
-	$delivery_date_raw = (string) $order->get_meta( '_delivery_date' );
-
-	return array(
-		'order_id'                => $order->get_id(),
-		'order_number'            => $order->get_order_number(),
-		'created'                 => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
-		'delivery_date'           => $delivery_date_raw,
-		'delivery_date_formatted' => cmbwc_bon_format_delivery_date( $delivery_date_raw ),
-		'delivery_time'           => (string) $order->get_meta( '_delivery_time' ),
-		'customer'                => $customer,
-		'company'                 => (string) $order->get_billing_company(),
-		'phone'                   => (string) $order->get_billing_phone(),
-		'shipping_method'         => (string) $order->get_shipping_method(),
-		'shipping_address'        => $shipping_address,
-		'payment_method'          => (string) $order->get_payment_method_title(),
-		'order_note'              => (string) $order->get_customer_note(),
-		'subtotal'                => (float) $order->get_subtotal(),
-		'shipping_total'          => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-		'fees_total'              => (float) $order->get_total_fees(),
-		'total_tax'               => (float) $order->get_total_tax(),
-		'discount_total'          => (float) $order->get_discount_total(),
-		'grand_total'             => (float) $order->get_total(),
-		'items'                   => $items,
-		'deposit_items'           => $deposit_items,
-		'has_deposit'             => ! empty( $deposit_items ),
-	);
-}
-
-/**
- * Skjul tekniske meta-felter på ordrelinjer i Woo-admin.
- */
-add_filter( 'woocommerce_hidden_order_itemmeta', 'cmbwc_hide_internal_order_item_meta' );
-
-function cmbwc_hide_internal_order_item_meta( $hidden ) {
-	$hidden[] = '_cmbwc_service_key';
-	$hidden[] = '_cmbwc_service_price';
-	$hidden[] = '_cmbwc_service_price_type';
-	$hidden[] = '_cmbwc_service_is_deposit';
-
-	return array_unique( $hidden );
-}
-
-/**
- * PrintNode template override.
- */
-add_filter( 'woocommerce_printorders_printnode_print_template', 'cmbwc_printnode_template_override', 10, 2 );
-
-function cmbwc_printnode_template_override( $template, $order = null ) {
-	$custom = CMBWC_PATH . 'templates/printnode-bon.php';
-
-	if ( file_exists( $custom ) ) {
-		return $custom;
-	}
-
-	return $template;
-}
-
-/**
- * Ordre-actions dropdown.
- */
-add_filter( 'woocommerce_order_actions', 'cmbwc_add_order_actions' );
-
-function cmbwc_add_order_actions( $actions ) {
-	$actions['cmbwc_preview_bon'] = 'Vis BON';
-	$actions['cmbwc_print_bon']   = 'Print BON';
-
-	return $actions;
-}
-
-add_action( 'woocommerce_order_action_cmbwc_preview_bon', 'cmbwc_order_action_preview_bon' );
-
-function cmbwc_order_action_preview_bon( $order ) {
-	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
-		return;
-	}
-
-	$url = wp_nonce_url(
-		admin_url( 'admin-post.php?action=cmbwc_preview_bon&order_id=' . $order->get_id() ),
-		'cmbwc_preview_bon_' . $order->get_id()
-	);
-
-	wp_safe_redirect( $url );
-	exit;
-}
-
-add_action( 'woocommerce_order_action_cmbwc_print_bon', 'cmbwc_order_action_print_bon' );
-
-function cmbwc_order_action_print_bon( $order ) {
-	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
-		return;
-	}
-
-	global $woocommerce_simba_printorders_printnode;
-
-	if ( is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' ) ) {
-		$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order->get_id() );
-		cmbwc_mark_order_bon_printed( $order->get_id() );
+		return 'Levering';
 	}
 }
 
-/**
- * Preview-side.
- */
-add_action( 'admin_post_cmbwc_preview_bon', 'cmbwc_preview_bon_page' );
+if ( ! function_exists( 'cmbwc_find_next_unprinted_order_in_rows' ) ) {
+	function cmbwc_find_next_unprinted_order_in_rows( $rows ) {
+		if ( empty( $rows ) || ! is_array( $rows ) ) {
+			return null;
+		}
 
-function cmbwc_preview_bon_page() {
-	if ( ! current_user_can( 'edit_shop_orders' ) && ! current_user_can( 'manage_woocommerce' ) ) {
-		wp_die( 'Ingen adgang.' );
+		foreach ( $rows as $row ) {
+			if ( empty( $row['is_printed'] ) ) {
+				return $row;
+			}
+		}
+
+		return null;
 	}
-
-	$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
-
-	if ( ! $order_id ) {
-		wp_die( 'Manglende ordre-id.' );
-	}
-
-	check_admin_referer( 'cmbwc_preview_bon_' . $order_id );
-
-	$order = wc_get_order( $order_id );
-
-	if ( ! $order ) {
-		wp_die( 'Ordre ikke fundet.' );
-	}
-
-	echo '<!doctype html><html><head><meta charset="utf-8"><title>BON preview</title></head><body>';
-	include CMBWC_PATH . 'templates/printnode-bon.php';
-	echo '</body></html>';
-	exit;
 }
 
-/**
- * Knapper i ordrelisten.
- */
-add_filter( 'woocommerce_admin_order_actions', 'cmbwc_add_list_table_order_actions', 20, 2 );
+if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
+	function cmbwc_get_production_orders( $args = array() ) {
+		$defaults = array(
+			'date_from' => '',
+			'date_to'   => '',
+			'limit'     => -1,
+		);
 
-function cmbwc_add_list_table_order_actions( $actions, $order ) {
-	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
-		return $actions;
+		$args = wp_parse_args( $args, $defaults );
+
+		$order_query_args = array(
+			'limit'   => $args['limit'],
+			'orderby' => 'date',
+			'order'   => 'DESC',
+			'return'  => 'objects',
+		);
+
+		$orders = wc_get_orders( $order_query_args );
+
+		if ( empty( $orders ) ) {
+			return array();
+		}
+
+		$rows = array();
+
+		foreach ( $orders as $order ) {
+			if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+				continue;
+			}
+
+			$delivery_date_raw = trim( (string) $order->get_meta( '_delivery_date' ) );
+			$delivery_time     = trim( (string) $order->get_meta( '_delivery_time' ) );
+
+			if ( '' === $delivery_date_raw ) {
+				continue;
+			}
+
+			$delivery_date_ymd = cmbwc_normalize_delivery_date_to_ymd( $delivery_date_raw );
+
+			if ( '' === $delivery_date_ymd ) {
+				continue;
+			}
+
+			if ( ! empty( $args['date_from'] ) && $delivery_date_ymd < $args['date_from'] ) {
+				continue;
+			}
+
+			if ( ! empty( $args['date_to'] ) && $delivery_date_ymd > $args['date_to'] ) {
+				continue;
+			}
+
+			$items_output   = array();
+			$addons_output  = array();
+			$service_output = array();
+			$covers_total   = 0;
+
+			foreach ( $order->get_items() as $item ) {
+				if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
+					continue;
+				}
+
+				$item_name = trim( (string) $item->get_name() );
+				$item_qty  = (int) $item->get_quantity();
+				$covers    = absint( $item->get_meta( 'Kuverter', true ) );
+				$addons    = trim( (string) $item->get_meta( 'Tilvalg', true ) );
+				$service   = trim( (string) $item->get_meta( 'Service', true ) );
+
+				if ( $covers > 0 ) {
+					$covers_total += $covers;
+				}
+
+				$label = $item_name;
+
+				if ( $item_qty > 1 ) {
+					$label = $item_qty . ' x ' . $item_name;
+				}
+
+				if ( $covers > 0 ) {
+					$label .= ' (' . $covers . ' kuverter)';
+				}
+
+				$items_output[] = $label;
+
+				if ( '' !== $addons ) {
+					$addon_lines = preg_split( '/\r\n|\r|\n/', $addons );
+
+					foreach ( $addon_lines as $addon_line ) {
+						$addon_line = trim( $addon_line );
+
+						if ( '' !== $addon_line ) {
+							$addons_output[] = $addon_line;
+						}
+					}
+				}
+
+				if ( '' !== $service ) {
+					$service_output[] = $service;
+				}
+			}
+
+			$customer = trim( $order->get_formatted_billing_full_name() );
+
+			if ( '' === $customer ) {
+				$customer = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
+			}
+
+			if ( '' === $customer ) {
+				$customer = '-';
+			}
+
+			$preview_url = wp_nonce_url(
+				admin_url( 'admin-post.php?action=cmbwc_preview_bon&order_id=' . $order->get_id() ),
+				'cmbwc_preview_bon_' . $order->get_id()
+			);
+
+			$print_url = wp_nonce_url(
+				admin_url( 'admin-post.php?action=cmbwc_manual_print_bon&order_id=' . $order->get_id() ),
+				'cmbwc_manual_print_bon_' . $order->get_id()
+			);
+
+			$mark_printed_url = wp_nonce_url(
+				admin_url( 'admin-post.php?action=cmbwc_mark_bon_printed&order_id=' . $order->get_id() ),
+				'cmbwc_mark_bon_printed_' . $order->get_id()
+			);
+
+			$reset_printed_url = wp_nonce_url(
+				admin_url( 'admin-post.php?action=cmbwc_reset_bon_printed&order_id=' . $order->get_id() ),
+				'cmbwc_reset_bon_printed_' . $order->get_id()
+			);
+
+			$is_printed = function_exists( 'cmbwc_is_order_bon_printed' ) ? cmbwc_is_order_bon_printed( $order->get_id() ) : false;
+
+			$quick_data = array(
+				'order_number'    => $order->get_order_number(),
+				'customer'        => $customer,
+				'delivery_date'   => cmbwc_get_production_date_label( $delivery_date_raw ),
+				'delivery_time'   => $delivery_time ? $delivery_time : '-',
+				'delivery_type'   => cmbwc_get_order_delivery_type_label( $order ),
+				'covers_total'    => $covers_total,
+				'service'         => array_values( array_unique( $service_output ) ),
+				'status'          => wc_get_order_status_name( $order->get_status() ),
+				'items'           => $items_output,
+				'addons'          => array_values( array_unique( $addons_output ) ),
+				'customer_note'   => (string) $order->get_customer_note(),
+				'shipping_method' => (string) $order->get_shipping_method(),
+				'is_printed'      => $is_printed ? 'Ja' : 'Nej',
+			);
+
+			$rows[] = array(
+				'order_id'            => $order->get_id(),
+				'order_number'        => $order->get_order_number(),
+				'order_edit_url'      => admin_url( 'admin.php?page=wc-orders&action=edit&id=' . $order->get_id() ),
+				'preview_url'         => $preview_url,
+				'print_url'           => $print_url,
+				'mark_printed_url'    => $mark_printed_url,
+				'reset_printed_url'   => $reset_printed_url,
+				'delivery_date'       => $delivery_date_raw,
+				'delivery_date_ymd'   => $delivery_date_ymd,
+				'delivery_date_label' => cmbwc_get_production_date_label( $delivery_date_raw ),
+				'delivery_time'       => $delivery_time,
+				'delivery_sort'       => cmbwc_get_production_sort_datetime( $delivery_date_ymd, $delivery_time, $order ),
+				'created_sort'        => $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0,
+				'customer'            => $customer,
+				'covers_total'        => $covers_total,
+				'delivery_type'       => cmbwc_get_order_delivery_type_label( $order ),
+				'status'              => wc_get_order_status_name( $order->get_status() ),
+				'is_printed'          => $is_printed,
+				'quick_data'          => $quick_data,
+			);
+		}
+
+		usort( $rows, 'cmbwc_sort_production_rows' );
+
+		return $rows;
 	}
-
-	$preview_url = wp_nonce_url(
-		admin_url( 'admin-post.php?action=cmbwc_preview_bon&order_id=' . $order->get_id() ),
-		'cmbwc_preview_bon_' . $order->get_id()
-	);
-
-	$print_url = wp_nonce_url(
-		admin_url( 'admin-post.php?action=cmbwc_manual_print_bon&order_id=' . $order->get_id() ),
-		'cmbwc_manual_print_bon_' . $order->get_id()
-	);
-
-	$actions['cmbwc_preview_bon'] = array(
-		'url'    => $preview_url,
-		'name'   => 'Vis BON',
-		'action' => 'view cmbwc-preview-bon',
-	);
-
-	$actions['cmbwc_print_bon'] = array(
-		'url'    => $print_url,
-		'name'   => 'Print BON',
-		'action' => 'processing cmbwc-print-bon',
-	);
-
-	return $actions;
 }
 
-/**
- * Tving "Vis BON" i ordreoversigten til at åbne i ny fane.
- */
-add_action( 'admin_footer', 'cmbwc_force_order_list_preview_blank_target' );
+if ( ! function_exists( 'cmbwc_mark_bon_printed_handler' ) ) {
+	add_action( 'admin_post_cmbwc_mark_bon_printed', 'cmbwc_mark_bon_printed_handler' );
 
-function cmbwc_force_order_list_preview_blank_target() {
-	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+	function cmbwc_mark_bon_printed_handler() {
+		if ( ! current_user_can( 'edit_shop_orders' ) && ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( 'Ingen adgang.' );
+		}
 
-	if ( ! $screen ) {
-		return;
+		$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+
+		if ( ! $order_id ) {
+			wp_die( 'Manglende ordre-id.' );
+		}
+
+		check_admin_referer( 'cmbwc_mark_bon_printed_' . $order_id );
+
+		if ( function_exists( 'cmbwc_mark_order_bon_printed' ) ) {
+			cmbwc_mark_order_bon_printed( $order_id );
+		}
+
+		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'admin.php?page=cmbwc-production-overview' ) );
+		exit;
 	}
-
-	$allowed_ids = array( 'edit-shop_order', 'woocommerce_page_wc-orders' );
-
-	if ( ! in_array( $screen->id, $allowed_ids, true ) ) {
-		return;
-	}
-	?>
-	<script>
-	jQuery(function($){
-		$('a.cmbwc-preview-bon, a.button.action.cmbwc-preview-bon, a.view.cmbwc-preview-bon').attr('target', '_blank').attr('rel', 'noopener');
-		$(document).on('mouseenter', 'a.cmbwc-preview-bon, a.button.action.cmbwc-preview-bon, a.view.cmbwc-preview-bon', function(){
-			$(this).attr('target', '_blank').attr('rel', 'noopener');
-		});
-	});
-	</script>
-	<?php
 }
 
-/**
- * Manuel print fra ordrelisten / produktionsoverblik.
- */
-add_action( 'admin_post_cmbwc_manual_print_bon', 'cmbwc_manual_print_bon_handler' );
+if ( ! function_exists( 'cmbwc_reset_bon_printed_handler' ) ) {
+	add_action( 'admin_post_cmbwc_reset_bon_printed', 'cmbwc_reset_bon_printed_handler' );
 
-function cmbwc_manual_print_bon_handler() {
-	if ( ! current_user_can( 'edit_shop_orders' ) && ! current_user_can( 'manage_woocommerce' ) ) {
-		wp_die( 'Ingen adgang.' );
+	function cmbwc_reset_bon_printed_handler() {
+		if ( ! current_user_can( 'edit_shop_orders' ) && ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( 'Ingen adgang.' );
+		}
+
+		$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+
+		if ( ! $order_id ) {
+			wp_die( 'Manglende ordre-id.' );
+		}
+
+		check_admin_referer( 'cmbwc_reset_bon_printed_' . $order_id );
+
+		if ( function_exists( 'cmbwc_unmark_order_bon_printed' ) ) {
+			cmbwc_unmark_order_bon_printed( $order_id );
+		}
+
+		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'admin.php?page=cmbwc-production-overview' ) );
+		exit;
 	}
-
-	$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
-
-	if ( ! $order_id ) {
-		wp_die( 'Manglende ordre-id.' );
-	}
-
-	check_admin_referer( 'cmbwc_manual_print_bon_' . $order_id );
-
-	global $woocommerce_simba_printorders_printnode;
-
-	if ( is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' ) ) {
-		$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id );
-		cmbwc_mark_order_bon_printed( $order_id );
-	}
-
-	wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php?post_type=shop_order' ) );
-	exit;
 }
 
-/**
- * Rigtig preview-knap på ordresiden.
- */
-add_action( 'woocommerce_order_item_add_action_buttons', 'cmbwc_add_preview_button_on_order_edit' );
+if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
+	function cmbwc_render_production_overview_page() {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			return;
+		}
 
-function cmbwc_add_preview_button_on_order_edit( $order ) {
-	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
-		return;
+		$preset    = isset( $_GET['preset'] ) ? sanitize_text_field( wp_unslash( $_GET['preset'] ) ) : '';
+		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
+		$date_to   = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
+
+		if ( in_array( $preset, array( 'today', 'week', 'month' ), true ) ) {
+			$preset_dates = cmbwc_get_production_preset_dates( $preset );
+			$date_from    = $preset_dates['date_from'];
+			$date_to      = $preset_dates['date_to'];
+		} elseif ( '' === $date_from && '' === $date_to ) {
+			$defaults  = cmbwc_get_production_preset_dates( '' );
+			$date_from = $defaults['date_from'];
+			$date_to   = $defaults['date_to'];
+		}
+
+		$rows    = cmbwc_get_production_orders(
+			array(
+				'date_from' => $date_from,
+				'date_to'   => $date_to,
+			)
+		);
+		$grouped = cmbwc_group_production_rows_by_date( $rows );
+
+		$base_url = admin_url( 'admin.php?page=cmbwc-production-overview' );
+		?>
+		<div class="wrap">
+			<h1>Produktionsoverblik</h1>
+
+			<style>
+				.cmbwc-po-badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:600; line-height:1.2; white-space:nowrap; }
+				.cmbwc-po-badge-delivery { background:#e8f1ff; color:#0b57d0; }
+				.cmbwc-po-badge-pickup { background:#e9f7ef; color:#137333; }
+				.cmbwc-po-badge-printed { background:#e9f7ef; color:#137333; }
+				.cmbwc-po-badge-unprinted { background:#fff4e5; color:#8a4b00; }
+				.cmbwc-po-day-summary { display:flex; gap:12px; flex-wrap:wrap; margin:0 0 10px; align-items:center; }
+				.cmbwc-po-summary-box { background:#fff; border:1px solid #ddd; padding:10px 14px; border-radius:6px; font-weight:600; }
+				.cmbwc-po-modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99998; }
+				.cmbwc-po-modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:min(760px, calc(100vw - 40px)); max-height:calc(100vh - 40px); overflow:auto; background:#fff; border-radius:8px; box-shadow:0 20px 50px rgba(0,0,0,.25); z-index:99999; }
+				.cmbwc-po-modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid #e5e5e5; }
+				.cmbwc-po-modal-body { padding:18px; }
+				.cmbwc-po-close { border:0; background:transparent; font-size:24px; line-height:1; cursor:pointer; }
+				.cmbwc-po-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px 20px; margin-bottom:16px; }
+				.cmbwc-po-box { background:#fafafa; border:1px solid #e5e5e5; padding:12px; border-radius:6px; }
+				.cmbwc-po-box h4 { margin:0 0 8px; }
+				.cmbwc-po-box ul { margin:0; padding-left:18px; }
+				@media (max-width:782px) {
+					.cmbwc-po-grid { grid-template-columns:1fr; }
+				}
+			</style>
+
+			<form method="get" style="background:#fff; border:1px solid #ddd; padding:16px; margin:16px 0; max-width:1100px;">
+				<input type="hidden" name="page" value="cmbwc-production-overview">
+
+				<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+					<a class="button <?php echo ( 'today' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'today', $base_url ) ); ?>">I dag</a>
+					<a class="button <?php echo ( 'week' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'week', $base_url ) ); ?>">Denne uge</a>
+					<a class="button <?php echo ( 'month' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'month', $base_url ) ); ?>">Denne måned</a>
+					<a class="button" href="<?php echo esc_url( $base_url ); ?>">Nulstil</a>
+				</div>
+
+				<div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
+					<div>
+						<label for="cmbwc-date-from" style="display:block; font-weight:600; margin-bottom:4px;">Fra dato</label>
+						<input type="date" id="cmbwc-date-from" name="date_from" value="<?php echo esc_attr( $date_from ); ?>">
+					</div>
+
+					<div>
+						<label for="cmbwc-date-to" style="display:block; font-weight:600; margin-bottom:4px;">Til dato</label>
+						<input type="date" id="cmbwc-date-to" name="date_to" value="<?php echo esc_attr( $date_to ); ?>">
+					</div>
+
+					<div>
+						<button type="submit" class="button button-primary">Filtrer</button>
+					</div>
+				</div>
+			</form>
+
+			<?php if ( empty( $rows ) ) : ?>
+				<div style="background:#fff; border:1px solid #ddd; padding:16px; max-width:1100px;">
+					<p>Ingen cateringordrer fundet i det valgte interval.</p>
+				</div>
+			<?php else : ?>
+				<?php foreach ( $grouped as $group ) : ?>
+					<?php $next_unprinted = cmbwc_find_next_unprinted_order_in_rows( $group['rows'] ); ?>
+					<div style="margin:0 0 24px;">
+						<h2 style="margin:0 0 10px;"><?php echo esc_html( $group['label'] ); ?></h2>
+
+						<div class="cmbwc-po-day-summary">
+							<div class="cmbwc-po-summary-box">Samlet kuverter: <?php echo esc_html( (int) $group['covers_total'] ); ?></div>
+							<div class="cmbwc-po-summary-box">Ordrer: <?php echo esc_html( count( $group['rows'] ) ); ?></div>
+
+							<?php if ( ! empty( $next_unprinted ) ) : ?>
+								<a class="button button-primary" href="<?php echo esc_url( $next_unprinted['print_url'] ); ?>">
+									Print næste BON (#<?php echo esc_html( $next_unprinted['order_number'] ); ?>)
+								</a>
+							<?php else : ?>
+								<span class="cmbwc-po-badge cmbwc-po-badge-printed">Alle bonner for denne dag er markeret som printet</span>
+							<?php endif; ?>
+						</div>
+
+						<div style="background:#fff; border:1px solid #ddd; overflow:auto;">
+							<table class="widefat striped" style="border:0; min-width:980px;">
+								<thead>
+									<tr>
+										<th style="width:90px;">Tid</th>
+										<th style="width:90px;">Ordre</th>
+										<th style="width:180px;">Kunde</th>
+										<th style="width:110px;">Kuverter</th>
+										<th style="width:140px;">Leveringstype</th>
+										<th style="width:120px;">Print</th>
+										<th style="width:120px;">Status</th>
+										<th style="width:360px;">Handlinger</th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php foreach ( $group['rows'] as $row ) : ?>
+										<?php
+										$is_pickup = ( 'Afhent selv' === $row['delivery_type'] );
+										$badge_cls = $is_pickup ? 'cmbwc-po-badge-pickup' : 'cmbwc-po-badge-delivery';
+										?>
+										<tr>
+											<td><strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong></td>
+											<td>#<?php echo esc_html( $row['order_number'] ); ?></td>
+											<td><?php echo esc_html( $row['customer'] ); ?></td>
+											<td><?php echo $row['covers_total'] ? esc_html( $row['covers_total'] ) : '-'; ?></td>
+											<td><span class="cmbwc-po-badge <?php echo esc_attr( $badge_cls ); ?>"><?php echo esc_html( $row['delivery_type'] ); ?></span></td>
+											<td>
+												<?php if ( ! empty( $row['is_printed'] ) ) : ?>
+													<span class="cmbwc-po-badge cmbwc-po-badge-printed">Printet</span>
+												<?php else : ?>
+													<span class="cmbwc-po-badge cmbwc-po-badge-unprinted">Ikke printet</span>
+												<?php endif; ?>
+											</td>
+											<td><?php echo esc_html( $row['status'] ); ?></td>
+											<td>
+												<div style="display:flex; gap:8px; flex-wrap:wrap;">
+													<button
+														type="button"
+														class="button button-small cmbwc-open-quick-view"
+														data-order='<?php echo esc_attr( wp_json_encode( $row['quick_data'] ) ); ?>'
+													>Hurtigvisning</button>
+													<a class="button button-small" href="<?php echo esc_url( $row['order_edit_url'] ); ?>">Åbn ordre</a>
+													<a class="button button-small" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener">Vis BON</a>
+													<a class="button button-small" href="<?php echo esc_url( $row['print_url'] ); ?>">Print BON</a>
+
+													<?php if ( ! empty( $row['is_printed'] ) ) : ?>
+														<a class="button button-small" href="<?php echo esc_url( $row['reset_printed_url'] ); ?>">Nulstil print</a>
+													<?php else : ?>
+														<a class="button button-small" href="<?php echo esc_url( $row['mark_printed_url'] ); ?>">Markér som printet</a>
+													<?php endif; ?>
+												</div>
+											</td>
+										</tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				<?php endforeach; ?>
+			<?php endif; ?>
+
+			<div class="cmbwc-po-modal-backdrop"></div>
+			<div class="cmbwc-po-modal" role="dialog" aria-modal="true" aria-label="Hurtigvisning af ordre">
+				<div class="cmbwc-po-modal-header">
+					<h2 style="margin:0;">Hurtigvisning</h2>
+					<button type="button" class="cmbwc-po-close" aria-label="Luk">&times;</button>
+				</div>
+				<div class="cmbwc-po-modal-body" id="cmbwc-po-modal-body"></div>
+			</div>
+
+			<script>
+			jQuery(function($){
+				function esc(text) {
+					return $('<div>').text(text == null ? '' : text).html();
+				}
+
+				function listHtml(items) {
+					if (!items || !items.length) {
+						return '<div style="color:#777;">-</div>';
+					}
+
+					var html = '<ul>';
+					items.forEach(function(item){
+						html += '<li>' + esc(item) + '</li>';
+					});
+					html += '</ul>';
+					return html;
+				}
+
+				function badgeHtml(type) {
+					var cls = type === 'Afhent selv' ? 'cmbwc-po-badge-pickup' : 'cmbwc-po-badge-delivery';
+					return '<span class="cmbwc-po-badge ' + cls + '">' + esc(type) + '</span>';
+				}
+
+				function printBadgeHtml(value) {
+					var cls = value === 'Ja' ? 'cmbwc-po-badge-printed' : 'cmbwc-po-badge-unprinted';
+					var label = value === 'Ja' ? 'Printet' : 'Ikke printet';
+					return '<span class="cmbwc-po-badge ' + cls + '">' + label + '</span>';
+				}
+
+				function openModal(data) {
+					var html = '';
+					html += '<div class="cmbwc-po-grid">';
+					html += '<div><strong>Ordre:</strong> #' + esc(data.order_number) + '</div>';
+					html += '<div><strong>Status:</strong> ' + esc(data.status) + '</div>';
+					html += '<div><strong>Kunde:</strong> ' + esc(data.customer) + '</div>';
+					html += '<div><strong>Leveringstype:</strong> ' + badgeHtml(data.delivery_type) + '</div>';
+					html += '<div><strong>Dato:</strong> ' + esc(data.delivery_date) + '</div>';
+					html += '<div><strong>Tid:</strong> ' + esc(data.delivery_time) + '</div>';
+					html += '<div><strong>Kuverter:</strong> ' + esc(data.covers_total ? data.covers_total : '-') + '</div>';
+					html += '<div><strong>Printstatus:</strong> ' + printBadgeHtml(data.is_printed) + '</div>';
+					html += '<div><strong>Leveringsmetode:</strong> ' + esc(data.shipping_method ? data.shipping_method : '-') + '</div>';
+					html += '</div>';
+
+					html += '<div class="cmbwc-po-box" style="margin-bottom:14px;">';
+					html += '<h4>Menu / varer</h4>';
+					html += listHtml(data.items || []);
+					html += '</div>';
+
+					html += '<div class="cmbwc-po-grid">';
+					html += '<div class="cmbwc-po-box">';
+					html += '<h4>Tilvalg</h4>';
+					html += listHtml(data.addons || []);
+					html += '</div>';
+
+					html += '<div class="cmbwc-po-box">';
+					html += '<h4>Service</h4>';
+					html += listHtml(data.service || []);
+					html += '</div>';
+					html += '</div>';
+
+					if (data.customer_note) {
+						html += '<div class="cmbwc-po-box" style="margin-top:14px;">';
+						html += '<h4>Kundebemærkning</h4>';
+						html += '<div>' + esc(data.customer_note).replace(/\n/g, '<br>') + '</div>';
+						html += '</div>';
+					}
+
+					$('#cmbwc-po-modal-body').html(html);
+					$('.cmbwc-po-modal-backdrop, .cmbwc-po-modal').show();
+				}
+
+				function closeModal() {
+					$('.cmbwc-po-modal-backdrop, .cmbwc-po-modal').hide();
+					$('#cmbwc-po-modal-body').empty();
+				}
+
+				$(document).on('click', '.cmbwc-open-quick-view', function(){
+					var raw = $(this).attr('data-order');
+
+					try {
+						var data = JSON.parse(raw);
+						openModal(data);
+					} catch (e) {
+						console.error('Kunne ikke parse ordredata', e);
+					}
+				});
+
+				$(document).on('click', '.cmbwc-po-close, .cmbwc-po-modal-backdrop', closeModal);
+
+				$(document).on('keydown', function(e){
+					if (e.key === 'Escape') {
+						closeModal();
+					}
+				});
+			});
+			</script>
+		</div>
+		<?php
 	}
-
-	$preview_url = wp_nonce_url(
-		admin_url( 'admin-post.php?action=cmbwc_preview_bon&order_id=' . $order->get_id() ),
-		'cmbwc_preview_bon_' . $order->get_id()
-	);
-
-	$print_url = wp_nonce_url(
-		admin_url( 'admin-post.php?action=cmbwc_manual_print_bon&order_id=' . $order->get_id() ),
-		'cmbwc_manual_print_bon_' . $order->get_id()
-	);
-
-	echo '<a href="' . esc_url( $preview_url ) . '" target="_blank" rel="noopener" class="button" style="margin-left:8px;">Vis BON</a>';
-	echo '<a href="' . esc_url( $print_url ) . '" class="button" style="margin-left:8px;">Print BON</a>';
 }
