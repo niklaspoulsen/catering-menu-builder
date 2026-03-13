@@ -19,12 +19,10 @@ function cmbwc_normalize_delivery_date_to_ymd( $date_string ) {
 		return '';
 	}
 
-	// Allerede Y-m-d
 	if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_string ) ) {
 		return $date_string;
 	}
 
-	// d/m/Y eller d-m-Y eller d.m.Y
 	if ( preg_match( '/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/', $date_string, $matches ) ) {
 		$day   = str_pad( $matches[1], 2, '0', STR_PAD_LEFT );
 		$month = str_pad( $matches[2], 2, '0', STR_PAD_LEFT );
@@ -97,6 +95,142 @@ function cmbwc_get_production_preset_dates( $preset ) {
 }
 
 /**
+ * Opret timestamp til sortering.
+ */
+function cmbwc_get_production_sort_datetime( $delivery_date, $delivery_time, $order = null ) {
+	$delivery_date = trim( (string) $delivery_date );
+	$delivery_time = trim( (string) $delivery_time );
+
+	if ( '' === $delivery_date ) {
+		return 0;
+	}
+
+	$date_part = $delivery_date;
+
+	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_part ) ) {
+		$date_part = cmbwc_normalize_delivery_date_to_ymd( $date_part );
+	}
+
+	if ( '' === $date_part ) {
+		return 0;
+	}
+
+	$time_part = '23:59';
+
+	if ( preg_match( '/^\d{1,2}:\d{2}$/', $delivery_time ) ) {
+		$time_part = $delivery_time;
+	}
+
+	$timestamp = strtotime( $date_part . ' ' . $time_part );
+
+	if ( $timestamp ) {
+		return $timestamp;
+	}
+
+	if ( $order && $order->get_date_created() ) {
+		return $order->get_date_created()->getTimestamp();
+	}
+
+	return 0;
+}
+
+/**
+ * Sortering: dato/tid først, derefter ordre-oprettelse.
+ */
+function cmbwc_sort_production_rows( $a, $b ) {
+	$a_sort = isset( $a['delivery_sort'] ) ? (int) $a['delivery_sort'] : 0;
+	$b_sort = isset( $b['delivery_sort'] ) ? (int) $b['delivery_sort'] : 0;
+
+	if ( $a_sort === $b_sort ) {
+		$a_created = isset( $a['created_sort'] ) ? (int) $a['created_sort'] : 0;
+		$b_created = isset( $b['created_sort'] ) ? (int) $b['created_sort'] : 0;
+
+		if ( $a_created === $b_created ) {
+			return 0;
+		}
+
+		return ( $a_created < $b_created ) ? -1 : 1;
+	}
+
+	return ( $a_sort < $b_sort ) ? -1 : 1;
+}
+
+/**
+ * Gruppér rækker efter dato.
+ */
+function cmbwc_group_production_rows_by_date( $rows ) {
+	$grouped = array();
+
+	foreach ( $rows as $row ) {
+		$key = ! empty( $row['delivery_date_ymd'] ) ? $row['delivery_date_ymd'] : 'unknown';
+
+		if ( ! isset( $grouped[ $key ] ) ) {
+			$grouped[ $key ] = array(
+				'label'        => ! empty( $row['delivery_date_label'] ) ? $row['delivery_date_label'] : $row['delivery_date'],
+				'rows'         => array(),
+				'covers_total' => 0,
+			);
+		}
+
+		$grouped[ $key ]['rows'][] = $row;
+		$grouped[ $key ]['covers_total'] += isset( $row['covers_total'] ) ? (int) $row['covers_total'] : 0;
+	}
+
+	return $grouped;
+}
+
+/**
+ * HTML helper til lister.
+ */
+function cmbwc_render_production_list_html( $items ) {
+	if ( empty( $items ) || ! is_array( $items ) ) {
+		return '<span style="color:#777;">-</span>';
+	}
+
+	$html = '<ul style="margin:0; padding-left:18px;">';
+
+	foreach ( $items as $item ) {
+		$html .= '<li>' . esc_html( $item ) . '</li>';
+	}
+
+	$html .= '</ul>';
+
+	return $html;
+}
+
+/**
+ * Bestem leveringstype.
+ */
+function cmbwc_get_order_delivery_type_label( $order ) {
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+		return '-';
+	}
+
+	$method_title = trim( (string) $order->get_shipping_method() );
+
+	if ( '' === $method_title ) {
+		return 'Afhent selv';
+	}
+
+	$normalized = function_exists( 'mb_strtolower' ) ? mb_strtolower( $method_title ) : strtolower( $method_title );
+
+	$pickup_keywords = array(
+		'local pickup',
+		'pickup',
+		'afhent',
+		'afhentning',
+	);
+
+	foreach ( $pickup_keywords as $keyword ) {
+		if ( false !== strpos( $normalized, $keyword ) ) {
+			return 'Afhent selv';
+		}
+	}
+
+	return 'Levering';
+}
+
+/**
  * Hent catering-ordrer til produktionsoverblik.
  */
 function cmbwc_get_production_orders( $args = array() ) {
@@ -108,8 +242,6 @@ function cmbwc_get_production_orders( $args = array() ) {
 
 	$args = wp_parse_args( $args, $defaults );
 
-	// Vi henter bredt og filtrerer selv på leveringsdato,
-	// så vi ikke mister ordrer pga. status/editor/HPOs-varianter.
 	$order_query_args = array(
 		'limit'   => $args['limit'],
 		'orderby' => 'date',
@@ -154,6 +286,7 @@ function cmbwc_get_production_orders( $args = array() ) {
 		$items_output   = array();
 		$addons_output  = array();
 		$service_output = array();
+		$covers_total   = 0;
 
 		foreach ( $order->get_items() as $item ) {
 			if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
@@ -162,9 +295,13 @@ function cmbwc_get_production_orders( $args = array() ) {
 
 			$item_name = trim( (string) $item->get_name() );
 			$item_qty  = (int) $item->get_quantity();
-			$covers    = trim( (string) $item->get_meta( 'Kuverter', true ) );
+			$covers    = absint( $item->get_meta( 'Kuverter', true ) );
 			$addons    = trim( (string) $item->get_meta( 'Tilvalg', true ) );
 			$service   = trim( (string) $item->get_meta( 'Service', true ) );
+
+			if ( $covers > 0 ) {
+				$covers_total += $covers;
+			}
 
 			$label = $item_name;
 
@@ -172,8 +309,8 @@ function cmbwc_get_production_orders( $args = array() ) {
 				$label = $item_qty . ' x ' . $item_name;
 			}
 
-			if ( '' !== $covers ) {
-				$label .= ' (' . absint( $covers ) . ' kuverter)';
+			if ( $covers > 0 ) {
+				$label .= ' (' . $covers . ' kuverter)';
 			}
 
 			$items_output[] = $label;
@@ -217,132 +354,44 @@ function cmbwc_get_production_orders( $args = array() ) {
 			'cmbwc_manual_print_bon_' . $order->get_id()
 		);
 
+		$quick_data = array(
+			'order_number'    => $order->get_order_number(),
+			'customer'        => $customer,
+			'delivery_date'   => cmbwc_get_production_date_label( $delivery_date_raw ),
+			'delivery_time'   => $delivery_time ? $delivery_time : '-',
+			'delivery_type'   => cmbwc_get_order_delivery_type_label( $order ),
+			'covers_total'    => $covers_total,
+			'service'         => array_values( array_unique( $service_output ) ),
+			'status'          => wc_get_order_status_name( $order->get_status() ),
+			'items'           => $items_output,
+			'addons'          => array_values( array_unique( $addons_output ) ),
+			'customer_note'   => (string) $order->get_customer_note(),
+			'shipping_method' => (string) $order->get_shipping_method(),
+		);
+
 		$rows[] = array(
-			'order_id'                => $order->get_id(),
-			'order_number'            => $order->get_order_number(),
-			'order_edit_url'          => admin_url( 'admin.php?page=wc-orders&action=edit&id=' . $order->get_id() ),
-			'fallback_order_edit_url' => admin_url( 'post.php?post=' . $order->get_id() . '&action=edit' ),
-			'preview_url'             => $preview_url,
-			'print_url'               => $print_url,
-			'delivery_date'           => $delivery_date_raw,
-			'delivery_date_ymd'       => $delivery_date_ymd,
-			'delivery_date_label'     => cmbwc_get_production_date_label( $delivery_date_raw ),
-			'delivery_time'           => $delivery_time,
-			'delivery_sort'           => cmbwc_get_production_sort_datetime( $delivery_date_ymd, $delivery_time, $order ),
-			'created_sort'            => $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0,
-			'customer'                => $customer,
-			'items'                   => $items_output,
-			'addons'                  => array_values( array_unique( $addons_output ) ),
-			'service'                 => array_values( array_unique( $service_output ) ),
-			'status'                  => wc_get_order_status_name( $order->get_status() ),
+			'order_id'            => $order->get_id(),
+			'order_number'        => $order->get_order_number(),
+			'order_edit_url'      => admin_url( 'admin.php?page=wc-orders&action=edit&id=' . $order->get_id() ),
+			'preview_url'         => $preview_url,
+			'print_url'           => $print_url,
+			'delivery_date'       => $delivery_date_raw,
+			'delivery_date_ymd'   => $delivery_date_ymd,
+			'delivery_date_label' => cmbwc_get_production_date_label( $delivery_date_raw ),
+			'delivery_time'       => $delivery_time,
+			'delivery_sort'       => cmbwc_get_production_sort_datetime( $delivery_date_ymd, $delivery_time, $order ),
+			'created_sort'        => $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0,
+			'customer'            => $customer,
+			'covers_total'        => $covers_total,
+			'delivery_type'       => cmbwc_get_order_delivery_type_label( $order ),
+			'status'              => wc_get_order_status_name( $order->get_status() ),
+			'quick_data'          => $quick_data,
 		);
 	}
 
 	usort( $rows, 'cmbwc_sort_production_rows' );
 
 	return $rows;
-}
-
-/**
- * Sortering: dato/tid først, derefter ordre-oprettelse.
- */
-function cmbwc_sort_production_rows( $a, $b ) {
-	$a_sort = isset( $a['delivery_sort'] ) ? (int) $a['delivery_sort'] : 0;
-	$b_sort = isset( $b['delivery_sort'] ) ? (int) $b['delivery_sort'] : 0;
-
-	if ( $a_sort === $b_sort ) {
-		$a_created = isset( $a['created_sort'] ) ? (int) $a['created_sort'] : 0;
-		$b_created = isset( $b['created_sort'] ) ? (int) $b['created_sort'] : 0;
-
-		if ( $a_created === $b_created ) {
-			return 0;
-		}
-
-		return ( $a_created < $b_created ) ? -1 : 1;
-	}
-
-	return ( $a_sort < $b_sort ) ? -1 : 1;
-}
-
-/**
- * Opret timestamp til sortering.
- */
-function cmbwc_get_production_sort_datetime( $delivery_date, $delivery_time, $order = null ) {
-	$delivery_date = trim( (string) $delivery_date );
-	$delivery_time = trim( (string) $delivery_time );
-
-	if ( '' === $delivery_date ) {
-		return 0;
-	}
-
-	$date_part = $delivery_date;
-
-	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_part ) ) {
-		$date_part = cmbwc_normalize_delivery_date_to_ymd( $date_part );
-	}
-
-	if ( '' === $date_part ) {
-		return 0;
-	}
-
-	$time_part = '23:59';
-
-	if ( preg_match( '/^\d{1,2}:\d{2}$/', $delivery_time ) ) {
-		$time_part = $delivery_time;
-	}
-
-	$timestamp = strtotime( $date_part . ' ' . $time_part );
-
-	if ( $timestamp ) {
-		return $timestamp;
-	}
-
-	if ( $order && $order->get_date_created() ) {
-		return $order->get_date_created()->getTimestamp();
-	}
-
-	return 0;
-}
-
-/**
- * Gruppér rækker efter dato.
- */
-function cmbwc_group_production_rows_by_date( $rows ) {
-	$grouped = array();
-
-	foreach ( $rows as $row ) {
-		$key = ! empty( $row['delivery_date_ymd'] ) ? $row['delivery_date_ymd'] : 'unknown';
-
-		if ( ! isset( $grouped[ $key ] ) ) {
-			$grouped[ $key ] = array(
-				'label' => ! empty( $row['delivery_date_label'] ) ? $row['delivery_date_label'] : $row['delivery_date'],
-				'rows'  => array(),
-			);
-		}
-
-		$grouped[ $key ]['rows'][] = $row;
-	}
-
-	return $grouped;
-}
-
-/**
- * HTML helper til lister.
- */
-function cmbwc_render_production_list_html( $items ) {
-	if ( empty( $items ) || ! is_array( $items ) ) {
-		return '<span style="color:#777;">-</span>';
-	}
-
-	$html = '<ul style="margin:0; padding-left:18px;">';
-
-	foreach ( $items as $item ) {
-		$html .= '<li>' . esc_html( $item ) . '</li>';
-	}
-
-	$html .= '</ul>';
-
-	return $html;
 }
 
 /**
@@ -380,6 +429,101 @@ function cmbwc_render_production_overview_page() {
 	<div class="wrap">
 		<h1>Produktionsoverblik</h1>
 
+		<style>
+			.cmbwc-po-badge {
+				display: inline-block;
+				padding: 4px 8px;
+				border-radius: 999px;
+				font-size: 12px;
+				font-weight: 600;
+				line-height: 1.2;
+				white-space: nowrap;
+			}
+			.cmbwc-po-badge-delivery {
+				background: #e8f1ff;
+				color: #0b57d0;
+			}
+			.cmbwc-po-badge-pickup {
+				background: #e9f7ef;
+				color: #137333;
+			}
+			.cmbwc-po-day-summary {
+				display: flex;
+				gap: 12px;
+				flex-wrap: wrap;
+				margin: 0 0 10px;
+			}
+			.cmbwc-po-summary-box {
+				background: #fff;
+				border: 1px solid #ddd;
+				padding: 10px 14px;
+				border-radius: 6px;
+				font-weight: 600;
+			}
+			.cmbwc-po-modal-backdrop {
+				display: none;
+				position: fixed;
+				inset: 0;
+				background: rgba(0,0,0,.45);
+				z-index: 99998;
+			}
+			.cmbwc-po-modal {
+				display: none;
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: min(760px, calc(100vw - 40px));
+				max-height: calc(100vh - 40px);
+				overflow: auto;
+				background: #fff;
+				border-radius: 8px;
+				box-shadow: 0 20px 50px rgba(0,0,0,.25);
+				z-index: 99999;
+			}
+			.cmbwc-po-modal-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: 16px 18px;
+				border-bottom: 1px solid #e5e5e5;
+			}
+			.cmbwc-po-modal-body {
+				padding: 18px;
+			}
+			.cmbwc-po-close {
+				border: 0;
+				background: transparent;
+				font-size: 24px;
+				line-height: 1;
+				cursor: pointer;
+			}
+			.cmbwc-po-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 12px 20px;
+				margin-bottom: 16px;
+			}
+			.cmbwc-po-box {
+				background: #fafafa;
+				border: 1px solid #e5e5e5;
+				padding: 12px;
+				border-radius: 6px;
+			}
+			.cmbwc-po-box h4 {
+				margin: 0 0 8px;
+			}
+			.cmbwc-po-box ul {
+				margin: 0;
+				padding-left: 18px;
+			}
+			@media (max-width: 782px) {
+				.cmbwc-po-grid {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+
 		<form method="get" style="background:#fff; border:1px solid #ddd; padding:16px; margin:16px 0; max-width:1100px;">
 			<input type="hidden" name="page" value="cmbwc-production-overview">
 
@@ -416,48 +560,53 @@ function cmbwc_render_production_overview_page() {
 				<div style="margin:0 0 24px;">
 					<h2 style="margin:0 0 10px;"><?php echo esc_html( $group['label'] ); ?></h2>
 
+					<div class="cmbwc-po-day-summary">
+						<div class="cmbwc-po-summary-box">
+							Samlet kuverter: <?php echo esc_html( (int) $group['covers_total'] ); ?>
+						</div>
+						<div class="cmbwc-po-summary-box">
+							Ordrer: <?php echo esc_html( count( $group['rows'] ) ); ?>
+						</div>
+					</div>
+
 					<div style="background:#fff; border:1px solid #ddd; overflow:auto;">
-						<table class="widefat striped" style="border:0; min-width:1200px;">
+						<table class="widefat striped" style="border:0; min-width:900px;">
 							<thead>
 								<tr>
 									<th style="width:90px;">Tid</th>
 									<th style="width:90px;">Ordre</th>
 									<th style="width:180px;">Kunde</th>
-									<th>Menu / varer</th>
-									<th style="width:260px;">Tilvalg</th>
-									<th style="width:220px;">Service</th>
+									<th style="width:110px;">Kuverter</th>
+									<th style="width:140px;">Leveringstype</th>
 									<th style="width:120px;">Status</th>
-									<th style="width:240px;">Handlinger</th>
+									<th style="width:280px;">Handlinger</th>
 								</tr>
 							</thead>
 							<tbody>
 								<?php foreach ( $group['rows'] as $row ) : ?>
+									<?php
+									$is_pickup = ( 'Afhent selv' === $row['delivery_type'] );
+									$badge_cls = $is_pickup ? 'cmbwc-po-badge-pickup' : 'cmbwc-po-badge-delivery';
+									?>
 									<tr>
+										<td><strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong></td>
+										<td>#<?php echo esc_html( $row['order_number'] ); ?></td>
+										<td><?php echo esc_html( $row['customer'] ); ?></td>
+										<td><?php echo $row['covers_total'] ? esc_html( $row['covers_total'] ) : '-'; ?></td>
 										<td>
-											<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
+											<span class="cmbwc-po-badge <?php echo esc_attr( $badge_cls ); ?>">
+												<?php echo esc_html( $row['delivery_type'] ); ?>
+											</span>
 										</td>
-										<td>
-											#<?php echo esc_html( $row['order_number'] ); ?>
-										</td>
-										<td>
-											<?php echo esc_html( $row['customer'] ); ?>
-										</td>
-										<td>
-											<?php echo wp_kses_post( cmbwc_render_production_list_html( $row['items'] ) ); ?>
-										</td>
-										<td>
-											<?php echo wp_kses_post( cmbwc_render_production_list_html( $row['addons'] ) ); ?>
-										</td>
-										<td>
-											<?php echo wp_kses_post( cmbwc_render_production_list_html( $row['service'] ) ); ?>
-										</td>
-										<td>
-											<?php echo esc_html( $row['status'] ); ?>
-										</td>
+										<td><?php echo esc_html( $row['status'] ); ?></td>
 										<td>
 											<div style="display:flex; gap:8px; flex-wrap:wrap;">
+												<button
+													type="button"
+													class="button button-small cmbwc-open-quick-view"
+													data-order='<?php echo esc_attr( wp_json_encode( $row['quick_data'] ) ); ?>'
+												>Hurtigvisning</button>
 												<a class="button button-small" href="<?php echo esc_url( $row['order_edit_url'] ); ?>">Åbn ordre</a>
-												<a class="button button-small" href="<?php echo esc_url( $row['fallback_order_edit_url'] ); ?>">Fallback ordre</a>
 												<a class="button button-small" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener">Vis BON</a>
 												<a class="button button-small" href="<?php echo esc_url( $row['print_url'] ); ?>">Print BON</a>
 											</div>
@@ -470,6 +619,106 @@ function cmbwc_render_production_overview_page() {
 				</div>
 			<?php endforeach; ?>
 		<?php endif; ?>
+
+		<div class="cmbwc-po-modal-backdrop"></div>
+		<div class="cmbwc-po-modal" role="dialog" aria-modal="true" aria-label="Hurtigvisning af ordre">
+			<div class="cmbwc-po-modal-header">
+				<h2 style="margin:0;">Hurtigvisning</h2>
+				<button type="button" class="cmbwc-po-close" aria-label="Luk">&times;</button>
+			</div>
+			<div class="cmbwc-po-modal-body" id="cmbwc-po-modal-body"></div>
+		</div>
+
+		<script>
+		jQuery(function($){
+			function esc(text) {
+				return $('<div>').text(text == null ? '' : text).html();
+			}
+
+			function listHtml(items) {
+				if (!items || !items.length) {
+					return '<div style="color:#777;">-</div>';
+				}
+
+				var html = '<ul>';
+				items.forEach(function(item){
+					html += '<li>' + esc(item) + '</li>';
+				});
+				html += '</ul>';
+				return html;
+			}
+
+			function badgeHtml(type) {
+				var cls = type === 'Afhent selv' ? 'cmbwc-po-badge-pickup' : 'cmbwc-po-badge-delivery';
+				return '<span class="cmbwc-po-badge ' + cls + '">' + esc(type) + '</span>';
+			}
+
+			function openModal(data) {
+				var html = '';
+				html += '<div class="cmbwc-po-grid">';
+				html += '<div><strong>Ordre:</strong> #' + esc(data.order_number) + '</div>';
+				html += '<div><strong>Status:</strong> ' + esc(data.status) + '</div>';
+				html += '<div><strong>Kunde:</strong> ' + esc(data.customer) + '</div>';
+				html += '<div><strong>Leveringstype:</strong> ' + badgeHtml(data.delivery_type) + '</div>';
+				html += '<div><strong>Dato:</strong> ' + esc(data.delivery_date) + '</div>';
+				html += '<div><strong>Tid:</strong> ' + esc(data.delivery_time) + '</div>';
+				html += '<div><strong>Kuverter:</strong> ' + esc(data.covers_total ? data.covers_total : '-') + '</div>';
+				html += '<div><strong>Leveringsmetode:</strong> ' + esc(data.shipping_method ? data.shipping_method : '-') + '</div>';
+				html += '</div>';
+
+				html += '<div class="cmbwc-po-box" style="margin-bottom:14px;">';
+				html += '<h4>Menu / varer</h4>';
+				html += listHtml(data.items || []);
+				html += '</div>';
+
+				html += '<div class="cmbwc-po-grid">';
+				html += '<div class="cmbwc-po-box">';
+				html += '<h4>Tilvalg</h4>';
+				html += listHtml(data.addons || []);
+				html += '</div>';
+
+				html += '<div class="cmbwc-po-box">';
+				html += '<h4>Service</h4>';
+				html += listHtml(data.service || []);
+				html += '</div>';
+				html += '</div>';
+
+				if (data.customer_note) {
+					html += '<div class="cmbwc-po-box" style="margin-top:14px;">';
+					html += '<h4>Kundebemærkning</h4>';
+					html += '<div>' + esc(data.customer_note).replace(/\n/g, '<br>') + '</div>';
+					html += '</div>';
+				}
+
+				$('#cmbwc-po-modal-body').html(html);
+				$('.cmbwc-po-modal-backdrop, .cmbwc-po-modal').show();
+			}
+
+			function closeModal() {
+				$('.cmbwc-po-modal-backdrop, .cmbwc-po-modal').hide();
+				$('#cmbwc-po-modal-body').empty();
+			}
+
+			$(document).on('click', '.cmbwc-open-quick-view', function(){
+				var raw = $(this).attr('data-order');
+
+				try {
+					var data = JSON.parse(raw);
+					openModal(data);
+				} catch (e) {
+					console.error('Kunne ikke parse ordredata', e);
+				}
+			});
+
+			$(document).on('click', '.cmbwc-po-close, .cmbwc-po-modal-backdrop', closeModal);
+
+			$(document).on('keydown', function(e){
+				if (e.key === 'Escape') {
+					closeModal();
+				}
+			});
+		});
+		</script>
 	</div>
 	<?php
 }
