@@ -6,7 +6,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Splitter tekst til BON-linjer.
- * Understøtter både linjeskift og kommaseparerede værdier.
+ *
+ * Vigtigt:
+ * Vi splitter KUN på linjeskift.
+ * Ikke på komma, da nogle retter indeholder komma i navnet.
  */
 function cmbwc_bon_split_lines( $value ) {
 	$value = trim( (string) $value );
@@ -25,19 +28,7 @@ function cmbwc_bon_split_lines( $value ) {
 			continue;
 		}
 
-		if ( false !== strpos( $line, ',' ) ) {
-			$parts = array_map( 'trim', explode( ',', $line ) );
-
-			foreach ( $parts as $part ) {
-				$part = cmbwc_bon_normalize_qty_prefix( $part );
-
-				if ( '' !== $part ) {
-					$clean[] = $part;
-				}
-			}
-		} else {
-			$clean[] = cmbwc_bon_normalize_qty_prefix( $line );
-		}
+		$clean[] = cmbwc_bon_normalize_qty_prefix( $line );
 	}
 
 	return array_values( array_filter( $clean ) );
@@ -83,6 +74,44 @@ function cmbwc_bon_price( $amount, $order = null ) {
 }
 
 /**
+ * Formater leveringdato pænt og tydeligt.
+ * Eksempel: FREDAG D. 13/03 2026
+ */
+function cmbwc_bon_format_delivery_date( $date_string ) {
+	$date_string = trim( (string) $date_string );
+
+	if ( '' === $date_string ) {
+		return '';
+	}
+
+	$timestamp = strtotime( $date_string );
+
+	if ( ! $timestamp ) {
+		return $date_string;
+	}
+
+	$day_name = wp_date( 'l', $timestamp );
+
+	$translations = array(
+		'Monday'    => 'MANDAG',
+		'Tuesday'   => 'TIRSDAG',
+		'Wednesday' => 'ONSDAG',
+		'Thursday'  => 'TORSDAG',
+		'Friday'    => 'FREDAG',
+		'Saturday'  => 'LØRDAG',
+		'Sunday'    => 'SØNDAG',
+	);
+
+	if ( isset( $translations[ $day_name ] ) ) {
+		$day_name = $translations[ $day_name ];
+	} else {
+		$day_name = strtoupper( $day_name );
+	}
+
+	return $day_name . ' D. ' . wp_date( 'd/m Y', $timestamp );
+}
+
+/**
  * Udregner evt. service/depositum-linje fra en ordrelinje.
  *
  * Depositum styres af service-metaen:
@@ -118,9 +147,9 @@ function cmbwc_bon_get_deposit_line_from_item( $item ) {
 	}
 
 	return array(
-		'name'        => $service_label,
-		'display_name'=> $service_label . ' (Depositum)',
-		'amount'      => (float) $amount,
+		'name'         => $service_label,
+		'display_name' => $service_label . ' (Depositum)',
+		'amount'       => (float) $amount,
 	);
 }
 
@@ -172,29 +201,46 @@ function cmbwc_get_order_bon_data( $order ) {
 		$shipping_address = $order->get_formatted_billing_address();
 	}
 
+	$delivery_date_raw = (string) $order->get_meta( '_delivery_date' );
+
 	return array(
-		'order_id'          => $order->get_id(),
-		'order_number'      => $order->get_order_number(),
-		'created'           => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
-		'delivery_date'     => (string) $order->get_meta( '_delivery_date' ),
-		'delivery_time'     => (string) $order->get_meta( '_delivery_time' ),
-		'customer'          => $customer,
-		'company'           => (string) $order->get_billing_company(),
-		'phone'             => (string) $order->get_billing_phone(),
-		'shipping_method'   => (string) $order->get_shipping_method(),
-		'shipping_address'  => $shipping_address,
-		'payment_method'    => (string) $order->get_payment_method_title(),
-		'order_note'        => (string) $order->get_customer_note(),
-		'subtotal'          => (float) $order->get_subtotal(),
-		'shipping_total'    => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-		'fees_total'        => (float) $order->get_total_fees(),
-		'total_tax'         => (float) $order->get_total_tax(),
-		'discount_total'    => (float) $order->get_discount_total(),
-		'grand_total'       => (float) $order->get_total(),
-		'items'             => $items,
-		'deposit_items'     => $deposit_items,
-		'has_deposit'       => ! empty( $deposit_items ),
+		'order_id'               => $order->get_id(),
+		'order_number'           => $order->get_order_number(),
+		'created'                => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
+		'delivery_date'          => $delivery_date_raw,
+		'delivery_date_formatted'=> cmbwc_bon_format_delivery_date( $delivery_date_raw ),
+		'delivery_time'          => (string) $order->get_meta( '_delivery_time' ),
+		'customer'               => $customer,
+		'company'                => (string) $order->get_billing_company(),
+		'phone'                  => (string) $order->get_billing_phone(),
+		'shipping_method'        => (string) $order->get_shipping_method(),
+		'shipping_address'       => $shipping_address,
+		'payment_method'         => (string) $order->get_payment_method_title(),
+		'order_note'             => (string) $order->get_customer_note(),
+		'subtotal'               => (float) $order->get_subtotal(),
+		'shipping_total'         => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+		'fees_total'             => (float) $order->get_total_fees(),
+		'total_tax'              => (float) $order->get_total_tax(),
+		'discount_total'         => (float) $order->get_discount_total(),
+		'grand_total'            => (float) $order->get_total(),
+		'items'                  => $items,
+		'deposit_items'          => $deposit_items,
+		'has_deposit'            => ! empty( $deposit_items ),
 	);
+}
+
+/**
+ * Skjul tekniske meta-felter på ordrelinjer i Woo-admin.
+ */
+add_filter( 'woocommerce_hidden_order_itemmeta', 'cmbwc_hide_internal_order_item_meta' );
+
+function cmbwc_hide_internal_order_item_meta( $hidden ) {
+	$hidden[] = '_cmbwc_service_key';
+	$hidden[] = '_cmbwc_service_price';
+	$hidden[] = '_cmbwc_service_price_type';
+	$hidden[] = '_cmbwc_service_is_deposit';
+
+	return array_unique( $hidden );
 }
 
 /**
@@ -308,7 +354,6 @@ function cmbwc_add_list_table_order_actions( $actions, $order ) {
 		'url'    => $preview_url,
 		'name'   => 'Vis BON',
 		'action' => 'view cmbwc-preview-bon',
-		'target' => '_blank',
 	);
 
 	$actions['cmbwc_print_bon'] = array(
@@ -318,6 +363,35 @@ function cmbwc_add_list_table_order_actions( $actions, $order ) {
 	);
 
 	return $actions;
+}
+
+/**
+ * Tving "Vis BON" i ordreoversigten til at åbne i ny fane.
+ */
+add_action( 'admin_footer', 'cmbwc_force_order_list_preview_blank_target' );
+
+function cmbwc_force_order_list_preview_blank_target() {
+	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+	if ( ! $screen ) {
+		return;
+	}
+
+	$allowed_ids = array( 'edit-shop_order', 'woocommerce_page_wc-orders' );
+
+	if ( ! in_array( $screen->id, $allowed_ids, true ) ) {
+		return;
+	}
+	?>
+	<script>
+	jQuery(function($){
+		$('a.cmbwc-preview-bon, a.button.action.cmbwc-preview-bon, a.view.cmbwc-preview-bon').attr('target', '_blank').attr('rel', 'noopener');
+		$(document).on('mouseenter', 'a.cmbwc-preview-bon, a.button.action.cmbwc-preview-bon, a.view.cmbwc-preview-bon', function(){
+			$(this).attr('target', '_blank').attr('rel', 'noopener');
+		});
+	});
+	</script>
+	<?php
 }
 
 /**

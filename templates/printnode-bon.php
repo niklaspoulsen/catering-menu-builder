@@ -66,9 +66,9 @@ body {
 }
 
 .delivery-box {
-	border: 1px solid #000;
-	padding: 6px;
-	margin: 8px 0;
+	border: 2px solid #000;
+	padding: 7px 6px;
+	margin: 10px 0;
 	text-align: center;
 }
 
@@ -79,15 +79,17 @@ body {
 }
 
 .delivery-date {
-	margin-top: 2px;
-	font-size: 11px;
+	margin-top: 4px;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1.2;
 }
 
 .delivery-time {
-	font-size: 20px;
+	font-size: 22px;
 	font-weight: 700;
 	line-height: 1.1;
-	margin-top: 3px;
+	margin-top: 4px;
 }
 
 .address-box,
@@ -237,7 +239,15 @@ body {
 
 	<div class="delivery-box">
 		<div class="delivery-label">LEVERING</div>
-		<div class="delivery-date"><?php echo esc_html( $data['delivery_date'] ?: '-' ); ?></div>
+		<div class="delivery-date">
+			<?php
+			echo esc_html(
+				! empty( $data['delivery_date_formatted'] )
+					? $data['delivery_date_formatted']
+					: ( $data['delivery_date'] ?: '-' )
+			);
+			?>
+		</div>
 		<div class="delivery-time"><?php echo esc_html( $data['delivery_time'] ?: '-' ); ?></div>
 	</div>
 
