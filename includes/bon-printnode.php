@@ -53,12 +53,10 @@ function cmbwc_bon_normalize_qty_prefix( $text ) {
 		return '';
 	}
 
-	// Allerede korrekt format: "2 x Noget"
 	if ( preg_match( '/^\d+\s*x\s+/i', $text ) ) {
 		return $text;
 	}
 
-	// Format: "Noget x 2" -> "2 x Noget"
 	if ( preg_match( '/^(.*?)\s*x\s*(\d+)$/i', $text, $matches ) ) {
 		$name = trim( $matches[1] );
 		$qty  = absint( $matches[2] );
@@ -87,10 +85,8 @@ function cmbwc_bon_price( $amount, $order = null ) {
 /**
  * Udregner evt. service/depositum-linje fra en ordrelinje.
  *
- * Vigtigt:
- * Depositum ligger som meta på SELVE menulinjen.
- * Derfor må vi ikke tolke hele produktlinjen som depositum.
- * I stedet udleder vi en separat prislinje til bonens bund.
+ * Depositum styres af service-metaen:
+ * _cmbwc_service_is_deposit = yes
  */
 function cmbwc_bon_get_deposit_line_from_item( $item ) {
 	if ( ! $item || ! is_a( $item, 'WC_Order_Item_Product' ) ) {
@@ -122,8 +118,9 @@ function cmbwc_bon_get_deposit_line_from_item( $item ) {
 	}
 
 	return array(
-		'name'   => $service_label,
-		'amount' => (float) $amount,
+		'name'        => $service_label,
+		'display_name'=> $service_label . ' (Depositum)',
+		'amount'      => (float) $amount,
 	);
 }
 
@@ -147,7 +144,6 @@ function cmbwc_get_order_bon_data( $order ) {
 			continue;
 		}
 
-		// Produktlinjen skal ALTID blive i produktionen.
 		$item_data = array(
 			'name'       => $item->get_name(),
 			'qty'        => (int) $item->get_quantity(),
@@ -160,7 +156,6 @@ function cmbwc_get_order_bon_data( $order ) {
 
 		$items[] = $item_data;
 
-		// Separat depositumlinje til prissektionen.
 		$deposit_line = cmbwc_bon_get_deposit_line_from_item( $item );
 		if ( ! empty( $deposit_line ) ) {
 			$deposit_items[] = $deposit_line;
@@ -178,26 +173,27 @@ function cmbwc_get_order_bon_data( $order ) {
 	}
 
 	return array(
-		'order_id'         => $order->get_id(),
-		'order_number'     => $order->get_order_number(),
-		'created'          => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
-		'delivery_date'    => (string) $order->get_meta( '_delivery_date' ),
-		'delivery_time'    => (string) $order->get_meta( '_delivery_time' ),
-		'customer'         => $customer,
-		'company'          => (string) $order->get_billing_company(),
-		'phone'            => (string) $order->get_billing_phone(),
-		'shipping_method'  => (string) $order->get_shipping_method(),
-		'shipping_address' => $shipping_address,
-		'payment_method'   => (string) $order->get_payment_method_title(),
-		'order_note'       => (string) $order->get_customer_note(),
-		'subtotal'         => (float) $order->get_subtotal(),
-		'shipping_total'   => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-		'fees_total'       => (float) $order->get_total_fees(),
-		'total_tax'        => (float) $order->get_total_tax(),
-		'discount_total'   => (float) $order->get_discount_total(),
-		'grand_total'      => (float) $order->get_total(),
-		'items'            => $items,
-		'deposit_items'    => $deposit_items,
+		'order_id'          => $order->get_id(),
+		'order_number'      => $order->get_order_number(),
+		'created'           => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
+		'delivery_date'     => (string) $order->get_meta( '_delivery_date' ),
+		'delivery_time'     => (string) $order->get_meta( '_delivery_time' ),
+		'customer'          => $customer,
+		'company'           => (string) $order->get_billing_company(),
+		'phone'             => (string) $order->get_billing_phone(),
+		'shipping_method'   => (string) $order->get_shipping_method(),
+		'shipping_address'  => $shipping_address,
+		'payment_method'    => (string) $order->get_payment_method_title(),
+		'order_note'        => (string) $order->get_customer_note(),
+		'subtotal'          => (float) $order->get_subtotal(),
+		'shipping_total'    => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+		'fees_total'        => (float) $order->get_total_fees(),
+		'total_tax'         => (float) $order->get_total_tax(),
+		'discount_total'    => (float) $order->get_discount_total(),
+		'grand_total'       => (float) $order->get_total(),
+		'items'             => $items,
+		'deposit_items'     => $deposit_items,
+		'has_deposit'       => ! empty( $deposit_items ),
 	);
 }
 

@@ -45,14 +45,10 @@ body {
 }
 
 .bon-title {
-	font-size: 18px;
+	font-size: 22px;
 	font-weight: 700;
 	letter-spacing: 0.4px;
-	margin-bottom: 4px;
-}
-
-.bon-subtitle {
-	font-size: 11px;
+	margin-bottom: 2px;
 }
 
 .rule {
@@ -212,8 +208,7 @@ body {
 	</div>
 
 	<div class="bon-header">
-		<div class="bon-title">CATERING BON</div>
-		<div class="bon-subtitle">Ordre #<?php echo esc_html( $data['order_number'] ); ?></div>
+		<div class="bon-title">#<?php echo esc_html( $data['order_number'] ); ?></div>
 	</div>
 
 	<div class="meta-row">
@@ -327,17 +322,19 @@ body {
 
 	<div class="section-title">Pris</div>
 	<div class="totals">
-    <?php if ( ! empty( $data['deposit_items'] ) ) : ?>
-    	<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
-    		<div class="total-row">
-    			<span><?php echo esc_html( $deposit_item['name'] ); ?></span>
-    			<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['amount'], $order ) ); ?></span>
-    		</div>
-    	<?php endforeach; ?>
-    <?php endif; ?>
+		<?php if ( ! empty( $data['deposit_items'] ) ) : ?>
+			<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
+				<div class="total-row">
+					<span><?php echo esc_html( $deposit_item['display_name'] ); ?></span>
+					<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['amount'], $order ) ); ?></span>
+				</div>
+			<?php endforeach; ?>
+		<?php endif; ?>
 
 		<div class="total-row grand">
-			<span>Total</span>
+			<span>
+				<?php echo ! empty( $data['has_deposit'] ) ? 'Total inkl. depositum' : 'Total'; ?>
+			</span>
 			<span><?php echo wp_kses_post( cmbwc_bon_price( $data['grand_total'], $order ) ); ?></span>
 		</div>
 	</div>
