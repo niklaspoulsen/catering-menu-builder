@@ -4,120 +4,110 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$data = cmbwc_get_order_bon_data($order);
+if ( ! isset( $order ) || ! is_a( $order, 'WC_Order' ) ) {
+	echo '<p>Ordre mangler.</p>';
+	return;
+}
 
+$data = cmbwc_get_order_bon_data( $order );
 ?>
 
 <style>
-
-body{
-	font-family: Arial;
-	font-size:12px;
+body {
+	font-family: Arial, sans-serif;
+	font-size: 12px;
+	line-height: 1.4;
+	margin: 20px;
 }
-
-.bon{
-	width:300px;
+.bon {
+	max-width: 420px;
 }
-
-.bon h1{
-	font-size:20px;
-	margin-bottom:10px;
+.bon h1 {
+	font-size: 22px;
+	margin: 0 0 12px;
 }
-
-.section{
-	margin-top:15px;
+.section {
+	margin-top: 16px;
 }
-
-ul{
-	margin:4px 0 8px 16px;
+ul {
+	margin: 4px 0 8px 18px;
+	padding: 0;
 }
-
-hr{
-	border:0;
-	border-top:1px dashed #000;
-	margin:12px 0;
+hr {
+	border: 0;
+	border-top: 1px dashed #000;
+	margin: 12px 0;
 }
-
+.label {
+	font-weight: 700;
+}
+.item-title {
+	font-weight: 700;
+	font-size: 14px;
+	margin-bottom: 4px;
+}
 </style>
 
 <div class="bon">
+	<h1>CATERING BON</h1>
 
-<h1>CATERING BON</h1>
+	<div><span class="label">Ordre:</span> #<?php echo esc_html( $data['order_number'] ); ?></div>
+	<div><span class="label">Oprettet:</span> <?php echo esc_html( $data['created'] ); ?></div>
 
-<strong>Ordre:</strong> #<?php echo $data['order_number']; ?><br>
-<strong>Oprettet:</strong> <?php echo $data['created']; ?><br>
+	<br>
 
-<br>
+	<div><span class="label">Leveringsdato:</span> <?php echo esc_html( $data['delivery_date'] ?: '-' ); ?></div>
+	<div><span class="label">Tid:</span> <?php echo esc_html( $data['delivery_time'] ?: '-' ); ?></div>
 
-<strong>Leveringsdato:</strong> <?php echo $data['delivery_date']; ?><br>
-<strong>Tid:</strong> <?php echo $data['delivery_time']; ?><br>
+	<br>
 
-<br>
+	<div><span class="label">Kunde:</span> <?php echo esc_html( $data['customer'] ?: '-' ); ?></div>
+	<div><span class="label">Firma:</span> <?php echo esc_html( $data['company'] ?: '-' ); ?></div>
+	<div><span class="label">Tlf:</span> <?php echo esc_html( $data['phone'] ?: '-' ); ?></div>
+	<div><span class="label">Levering:</span> <?php echo esc_html( $data['shipping_method'] ?: '-' ); ?></div>
 
-<strong>Kunde:</strong> <?php echo $data['customer']; ?><br>
-<strong>Firma:</strong> <?php echo $data['company']; ?><br>
-<strong>Tlf:</strong> <?php echo $data['phone']; ?><br>
+	<hr>
 
-<hr>
+	<div class="section">
+		<h3>Produktion</h3>
 
-<div class="section">
+		<?php foreach ( $data['items'] as $item ) : ?>
+			<div class="item-title"><?php echo esc_html( $item['name'] ); ?></div>
 
-<h3>Produktion</h3>
+			<?php if ( ! empty( $item['covers'] ) ) : ?>
+				<div><span class="label">Kuverter:</span> <?php echo esc_html( $item['covers'] ); ?></div>
+			<?php endif; ?>
 
-<?php foreach($data['items'] as $item): ?>
+			<?php if ( ! empty( $item['included'] ) ) : ?>
+				<div><span class="label">Indhold:</span></div>
+				<ul>
+					<?php foreach ( $item['included'] as $line ) : ?>
+						<li><?php echo esc_html( $line ); ?></li>
+					<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
 
-<strong><?php echo $item['name']; ?></strong><br>
+			<?php if ( ! empty( $item['addons'] ) ) : ?>
+				<div><span class="label">Tilvalg:</span></div>
+				<ul>
+					<?php foreach ( $item['addons'] as $line ) : ?>
+						<li><?php echo esc_html( $line ); ?></li>
+					<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
 
-<?php if($item['covers']): ?>
+			<?php if ( ! empty( $item['service'] ) ) : ?>
+				<div><span class="label">Service:</span> <?php echo esc_html( $item['service'] ); ?></div>
+			<?php endif; ?>
 
-Kuverter: <?php echo $item['covers']; ?><br>
+			<hr>
+		<?php endforeach; ?>
+	</div>
 
-<?php endif; ?>
-
-<?php if($item['included']): ?>
-
-Indhold:
-<ul>
-<?php foreach($item['included'] as $line): ?>
-<li><?php echo $line; ?></li>
-<?php endforeach; ?>
-</ul>
-
-<?php endif; ?>
-
-<?php if($item['addons']): ?>
-
-Tilvalg:
-<ul>
-<?php foreach($item['addons'] as $line): ?>
-<li><?php echo $line; ?></li>
-<?php endforeach; ?>
-</ul>
-
-<?php endif; ?>
-
-<?php if($item['service']): ?>
-
-Service: <?php echo $item['service']; ?><br>
-
-<?php endif; ?>
-
-<hr>
-
-<?php endforeach; ?>
-
-</div>
-
-<?php if($data['order_note']): ?>
-
-<div class="section">
-
-<h3>Kundebemærkning</h3>
-
-<?php echo nl2br($data['order_note']); ?>
-
-</div>
-
-<?php endif; ?>
-
+	<?php if ( ! empty( $data['order_note'] ) ) : ?>
+		<div class="section">
+			<h3>Kundebemærkning</h3>
+			<div><?php echo nl2br( esc_html( $data['order_note'] ) ); ?></div>
+		</div>
+	<?php endif; ?>
 </div>
