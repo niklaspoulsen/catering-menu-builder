@@ -5,6 +5,98 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Konverter leveringsdato til Y-m-d så robust som muligt.
+ * Understøtter bl.a.:
+ * - 2026-03-16
+ * - 16/03/2026
+ * - 16-03-2026
+ * - 16.03.2026
+ */
+function cmbwc_normalize_delivery_date_to_ymd( $date_string ) {
+	$date_string = trim( (string) $date_string );
+
+	if ( '' === $date_string ) {
+		return '';
+	}
+
+	// Allerede Y-m-d
+	if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_string ) ) {
+		return $date_string;
+	}
+
+	// d/m/Y eller d-m-Y eller d.m.Y
+	if ( preg_match( '/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/', $date_string, $matches ) ) {
+		$day   = str_pad( $matches[1], 2, '0', STR_PAD_LEFT );
+		$month = str_pad( $matches[2], 2, '0', STR_PAD_LEFT );
+		$year  = $matches[3];
+
+		return $year . '-' . $month . '-' . $day;
+	}
+
+	$timestamp = strtotime( $date_string );
+
+	if ( ! $timestamp ) {
+		return '';
+	}
+
+	return wp_date( 'Y-m-d', $timestamp );
+}
+
+/**
+ * Byg label for dato i oversigten.
+ */
+function cmbwc_get_production_date_label( $delivery_date ) {
+	$delivery_date = trim( (string) $delivery_date );
+
+	if ( '' === $delivery_date ) {
+		return '';
+	}
+
+	if ( function_exists( 'cmbwc_bon_format_delivery_date' ) ) {
+		return cmbwc_bon_format_delivery_date( $delivery_date );
+	}
+
+	return $delivery_date;
+}
+
+/**
+ * Returnér preset-datoer.
+ */
+function cmbwc_get_production_preset_dates( $preset ) {
+	$today_ts = current_time( 'timestamp' );
+	$today    = wp_date( 'Y-m-d', $today_ts );
+
+	switch ( $preset ) {
+		case 'today':
+			return array(
+				'date_from' => $today,
+				'date_to'   => $today,
+			);
+
+		case 'week':
+			$weekday = (int) wp_date( 'N', $today_ts ); // 1 = mandag
+			$start   = strtotime( '-' . ( $weekday - 1 ) . ' days', $today_ts );
+			$end     = strtotime( '+6 days', $start );
+
+			return array(
+				'date_from' => wp_date( 'Y-m-d', $start ),
+				'date_to'   => wp_date( 'Y-m-d', $end ),
+			);
+
+		case 'month':
+			return array(
+				'date_from' => wp_date( 'Y-m-01', $today_ts ),
+				'date_to'   => wp_date( 'Y-m-t', $today_ts ),
+			);
+	}
+
+	return array(
+		'date_from' => $today,
+		'date_to'   => wp_date( 'Y-m-d', strtotime( '+14 days', $today_ts ) ),
+	);
+}
+
+/**
  * Hent catering-ordrer til produktionsoverblik.
  */
 function cmbwc_get_production_orders( $args = array() ) {
@@ -16,12 +108,13 @@ function cmbwc_get_production_orders( $args = array() ) {
 
 	$args = wp_parse_args( $args, $defaults );
 
+	// Vi henter bredt og filtrerer selv på leveringsdato,
+	// så vi ikke mister ordrer pga. status/editor/HPOs-varianter.
 	$order_query_args = array(
 		'limit'   => $args['limit'],
 		'orderby' => 'date',
 		'order'   => 'DESC',
 		'return'  => 'objects',
-		'status'  => array_keys( wc_get_order_statuses() ),
 	);
 
 	$orders = wc_get_orders( $order_query_args );
@@ -37,19 +130,18 @@ function cmbwc_get_production_orders( $args = array() ) {
 			continue;
 		}
 
-		$delivery_date = trim( (string) $order->get_meta( '_delivery_date' ) );
-		$delivery_time = trim( (string) $order->get_meta( '_delivery_time' ) );
+		$delivery_date_raw = trim( (string) $order->get_meta( '_delivery_date' ) );
+		$delivery_time     = trim( (string) $order->get_meta( '_delivery_time' ) );
 
-		if ( '' === $delivery_date ) {
+		if ( '' === $delivery_date_raw ) {
 			continue;
 		}
 
-		$delivery_timestamp = strtotime( $delivery_date );
-		if ( ! $delivery_timestamp ) {
+		$delivery_date_ymd = cmbwc_normalize_delivery_date_to_ymd( $delivery_date_raw );
+
+		if ( '' === $delivery_date_ymd ) {
 			continue;
 		}
-
-		$delivery_date_ymd = wp_date( 'Y-m-d', $delivery_timestamp );
 
 		if ( ! empty( $args['date_from'] ) && $delivery_date_ymd < $args['date_from'] ) {
 			continue;
@@ -68,14 +160,14 @@ function cmbwc_get_production_orders( $args = array() ) {
 				continue;
 			}
 
-			$item_name  = trim( (string) $item->get_name() );
-			$item_qty   = (int) $item->get_quantity();
-			$covers     = trim( (string) $item->get_meta( 'Kuverter', true ) );
-			$included   = trim( (string) $item->get_meta( 'Indhold', true ) );
-			$addons     = trim( (string) $item->get_meta( 'Tilvalg', true ) );
-			$service    = trim( (string) $item->get_meta( 'Service', true ) );
+			$item_name = trim( (string) $item->get_name() );
+			$item_qty  = (int) $item->get_quantity();
+			$covers    = trim( (string) $item->get_meta( 'Kuverter', true ) );
+			$addons    = trim( (string) $item->get_meta( 'Tilvalg', true ) );
+			$service   = trim( (string) $item->get_meta( 'Service', true ) );
 
 			$label = $item_name;
+
 			if ( $item_qty > 1 ) {
 				$label = $item_qty . ' x ' . $item_name;
 			}
@@ -132,13 +224,11 @@ function cmbwc_get_production_orders( $args = array() ) {
 			'fallback_order_edit_url' => admin_url( 'post.php?post=' . $order->get_id() . '&action=edit' ),
 			'preview_url'             => $preview_url,
 			'print_url'               => $print_url,
-			'delivery_date'           => $delivery_date,
+			'delivery_date'           => $delivery_date_raw,
 			'delivery_date_ymd'       => $delivery_date_ymd,
-			'delivery_date_label'     => function_exists( 'cmbwc_bon_format_delivery_date' )
-				? cmbwc_bon_format_delivery_date( $delivery_date )
-				: $delivery_date,
+			'delivery_date_label'     => cmbwc_get_production_date_label( $delivery_date_raw ),
 			'delivery_time'           => $delivery_time,
-			'delivery_sort'           => cmbwc_get_production_sort_datetime( $delivery_date, $delivery_time, $order ),
+			'delivery_sort'           => cmbwc_get_production_sort_datetime( $delivery_date_ymd, $delivery_time, $order ),
 			'created_sort'            => $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0,
 			'customer'                => $customer,
 			'items'                   => $items_output,
@@ -185,7 +275,15 @@ function cmbwc_get_production_sort_datetime( $delivery_date, $delivery_time, $or
 		return 0;
 	}
 
-	$date_part = date( 'Y-m-d', strtotime( $delivery_date ) );
+	$date_part = $delivery_date;
+
+	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_part ) ) {
+		$date_part = cmbwc_normalize_delivery_date_to_ymd( $date_part );
+	}
+
+	if ( '' === $date_part ) {
+		return 0;
+	}
 
 	$time_part = '23:59';
 
@@ -229,18 +327,6 @@ function cmbwc_group_production_rows_by_date( $rows ) {
 }
 
 /**
- * Returnér standard datofilter.
- */
-function cmbwc_get_production_default_dates() {
-	$today = current_time( 'Y-m-d' );
-
-	return array(
-		'date_from' => $today,
-		'date_to'   => date( 'Y-m-d', strtotime( '+14 days', current_time( 'timestamp' ) ) ),
-	);
-}
-
-/**
  * HTML helper til lister.
  */
 function cmbwc_render_production_list_html( $items ) {
@@ -267,10 +353,19 @@ function cmbwc_render_production_overview_page() {
 		return;
 	}
 
-	$defaults = cmbwc_get_production_default_dates();
+	$preset    = isset( $_GET['preset'] ) ? sanitize_text_field( wp_unslash( $_GET['preset'] ) ) : '';
+	$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
+	$date_to   = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
 
-	$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : $defaults['date_from'];
-	$date_to   = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : $defaults['date_to'];
+	if ( in_array( $preset, array( 'today', 'week', 'month' ), true ) ) {
+		$preset_dates = cmbwc_get_production_preset_dates( $preset );
+		$date_from    = $preset_dates['date_from'];
+		$date_to      = $preset_dates['date_to'];
+	} elseif ( '' === $date_from && '' === $date_to ) {
+		$defaults  = cmbwc_get_production_preset_dates( '' );
+		$date_from = $defaults['date_from'];
+		$date_to   = $defaults['date_to'];
+	}
 
 	$rows    = cmbwc_get_production_orders(
 		array(
@@ -280,12 +375,20 @@ function cmbwc_render_production_overview_page() {
 	);
 	$grouped = cmbwc_group_production_rows_by_date( $rows );
 
+	$base_url = admin_url( 'admin.php?page=cmbwc-production-overview' );
 	?>
 	<div class="wrap">
 		<h1>Produktionsoverblik</h1>
 
-		<form method="get" style="background:#fff; border:1px solid #ddd; padding:16px; margin:16px 0; max-width:980px;">
+		<form method="get" style="background:#fff; border:1px solid #ddd; padding:16px; margin:16px 0; max-width:1100px;">
 			<input type="hidden" name="page" value="cmbwc-production-overview">
+
+			<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+				<a class="button <?php echo ( 'today' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'today', $base_url ) ); ?>">I dag</a>
+				<a class="button <?php echo ( 'week' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'week', $base_url ) ); ?>">Denne uge</a>
+				<a class="button <?php echo ( 'month' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'month', $base_url ) ); ?>">Denne måned</a>
+				<a class="button" href="<?php echo esc_url( $base_url ); ?>">Nulstil</a>
+			</div>
 
 			<div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
 				<div>
@@ -300,13 +403,12 @@ function cmbwc_render_production_overview_page() {
 
 				<div>
 					<button type="submit" class="button button-primary">Filtrer</button>
-					<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-production-overview' ) ); ?>">Nulstil</a>
 				</div>
 			</div>
 		</form>
 
 		<?php if ( empty( $rows ) ) : ?>
-			<div style="background:#fff; border:1px solid #ddd; padding:16px; max-width:980px;">
+			<div style="background:#fff; border:1px solid #ddd; padding:16px; max-width:1100px;">
 				<p>Ingen cateringordrer fundet i det valgte interval.</p>
 			</div>
 		<?php else : ?>
