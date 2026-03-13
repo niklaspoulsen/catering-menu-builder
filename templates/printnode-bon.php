@@ -72,6 +72,12 @@ html, body {
 	margin-top: 2px;
 }
 
+.address-box {
+	border: 1px solid #000;
+	padding: 6px;
+	margin: 8px 0;
+}
+
 .section-title {
 	font-size: 13px;
 	font-weight: 700;
@@ -86,17 +92,8 @@ html, body {
 }
 
 .item-head {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	gap: 8px;
 	font-weight: 700;
 	font-size: 13px;
-}
-
-.item-price {
-	white-space: nowrap;
-	text-align: right;
 }
 
 .item-meta {
@@ -184,6 +181,13 @@ html, body {
 		<div class="meta-row"><span class="meta-label">Levering:</span> <?php echo esc_html( $data['shipping_method'] ); ?></div>
 	<?php endif; ?>
 
+	<?php if ( ! empty( $data['shipping_address'] ) ) : ?>
+		<div class="address-box">
+			<div class="meta-label">Leveringsadresse</div>
+			<div><?php echo wp_kses_post( wpautop( $data['shipping_address'] ) ); ?></div>
+		</div>
+	<?php endif; ?>
+
 	<div class="rule"></div>
 
 	<div class="section-title">Produktion</div>
@@ -191,13 +195,10 @@ html, body {
 	<?php foreach ( $data['items'] as $item ) : ?>
 		<div class="item">
 			<div class="item-head">
-				<div>
-					<?php echo esc_html( $item['name'] ); ?>
-					<?php if ( ! empty( $item['qty'] ) && $item['qty'] > 1 ) : ?>
-						x <?php echo esc_html( $item['qty'] ); ?>
-					<?php endif; ?>
-				</div>
-				<div class="item-price"><?php echo wp_kses_post( cmbwc_bon_price( $item['line_total'], $order ) ); ?></div>
+				<?php echo esc_html( $item['name'] ); ?>
+				<?php if ( ! empty( $item['qty'] ) && $item['qty'] > 1 ) : ?>
+					x <?php echo esc_html( $item['qty'] ); ?>
+				<?php endif; ?>
 			</div>
 
 			<?php if ( ! empty( $item['covers'] ) ) : ?>
@@ -244,6 +245,15 @@ html, body {
 
 	<div class="section-title">Pris</div>
 	<div class="totals">
+		<?php if ( ! empty( $data['deposit_items'] ) ) : ?>
+			<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
+				<div class="total-row">
+					<span><?php echo esc_html( $deposit_item['name'] ); ?></span>
+					<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['line_total'], $order ) ); ?></span>
+				</div>
+			<?php endforeach; ?>
+		<?php endif; ?>
+
 		<div class="total-row grand">
 			<span>Total</span>
 			<span><?php echo wp_kses_post( cmbwc_bon_price( $data['grand_total'], $order ) ); ?></span>

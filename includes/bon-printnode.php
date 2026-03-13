@@ -15,7 +15,6 @@ function cmbwc_bon_split_lines( $value ) {
 		return [];
 	}
 
-	// Først split på linjeskift.
 	$lines = preg_split( '/\r\n|\r|\n/', $value );
 	$clean = [];
 
@@ -26,7 +25,6 @@ function cmbwc_bon_split_lines( $value ) {
 			continue;
 		}
 
-		// Hvis linjen er meget lang og kommasepareret, så split yderligere.
 		if ( strpos( $line, ',' ) !== false ) {
 			$parts = array_map( 'trim', explode( ',', $line ) );
 
@@ -57,6 +55,47 @@ function cmbwc_bon_price( $amount, $order = null ) {
 }
 
 /**
+ * Finder depositumlinjer.
+ * Vi prøver både på produktnavn og meta.
+ */
+function cmbwc_bon_is_deposit_item( $item ) {
+	if ( ! $item || ! is_a( $item, 'WC_Order_Item_Product' ) ) {
+		return false;
+	}
+
+	$name = mb_strtolower( trim( (string) $item->get_name() ) );
+
+	$keywords = [
+		'depositum',
+		'pant',
+		'service depositum',
+		'emballage depositum',
+	];
+
+	foreach ( $keywords as $keyword ) {
+		if ( false !== strpos( $name, $keyword ) ) {
+			return true;
+		}
+	}
+
+	$meta_checks = [
+		'_cmbwc_is_deposit',
+		'_is_deposit',
+		'depositum',
+	];
+
+	foreach ( $meta_checks as $meta_key ) {
+		$meta_value = $item->get_meta( $meta_key, true );
+
+		if ( in_array( $meta_value, [ '1', 1, 'yes', 'true', true ], true ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Samler alle data til BON.
  */
 function cmbwc_get_order_bon_data( $order ) {
@@ -68,25 +107,31 @@ function cmbwc_get_order_bon_data( $order ) {
 		return [];
 	}
 
-	$items = [];
+	$items          = [];
+	$deposit_items  = [];
 
 	foreach ( $order->get_items() as $item_id => $item ) {
 		if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
 			continue;
 		}
 
-		$included = cmbwc_bon_split_lines( $item->get_meta( 'Indhold', true ) );
-		$addons   = cmbwc_bon_split_lines( $item->get_meta( 'Tilvalg', true ) );
+		$is_deposit = cmbwc_bon_is_deposit_item( $item );
 
-		$items[] = [
+		$item_data = [
 			'name'       => $item->get_name(),
 			'qty'        => (int) $item->get_quantity(),
 			'covers'     => $item->get_meta( 'Kuverter', true ),
-			'included'   => $included,
-			'addons'     => $addons,
+			'included'   => cmbwc_bon_split_lines( $item->get_meta( 'Indhold', true ) ),
+			'addons'     => cmbwc_bon_split_lines( $item->get_meta( 'Tilvalg', true ) ),
 			'service'    => $item->get_meta( 'Service', true ),
 			'line_total' => (float) $item->get_total() + (float) $item->get_total_tax(),
 		];
+
+		if ( $is_deposit ) {
+			$deposit_items[] = $item_data;
+		} else {
+			$items[] = $item_data;
+		}
 	}
 
 	$customer = trim( $order->get_formatted_billing_full_name() );
@@ -94,25 +139,32 @@ function cmbwc_get_order_bon_data( $order ) {
 		$customer = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
 	}
 
+	$shipping_address = $order->get_formatted_shipping_address();
+	if ( '' === trim( wp_strip_all_tags( $shipping_address ) ) ) {
+		$shipping_address = $order->get_formatted_billing_address();
+	}
+
 	return [
-		'order_id'         => $order->get_id(),
-		'order_number'     => $order->get_order_number(),
-		'created'          => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
-		'delivery_date'    => (string) $order->get_meta( '_delivery_date' ),
-		'delivery_time'    => (string) $order->get_meta( '_delivery_time' ),
-		'customer'         => $customer,
-		'company'          => (string) $order->get_billing_company(),
-		'phone'            => (string) $order->get_billing_phone(),
-		'shipping_method'  => (string) $order->get_shipping_method(),
-		'payment_method'   => (string) $order->get_payment_method_title(),
-		'order_note'       => (string) $order->get_customer_note(),
-		'subtotal'         => (float) $order->get_subtotal(),
-		'shipping_total'   => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-		'fees_total'       => (float) $order->get_total_fees(),
-		'total_tax'        => (float) $order->get_total_tax(),
-		'discount_total'   => (float) $order->get_discount_total(),
-		'grand_total'      => (float) $order->get_total(),
-		'items'            => $items,
+		'order_id'          => $order->get_id(),
+		'order_number'      => $order->get_order_number(),
+		'created'           => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
+		'delivery_date'     => (string) $order->get_meta( '_delivery_date' ),
+		'delivery_time'     => (string) $order->get_meta( '_delivery_time' ),
+		'customer'          => $customer,
+		'company'           => (string) $order->get_billing_company(),
+		'phone'             => (string) $order->get_billing_phone(),
+		'shipping_method'   => (string) $order->get_shipping_method(),
+		'shipping_address'  => $shipping_address,
+		'payment_method'    => (string) $order->get_payment_method_title(),
+		'order_note'        => (string) $order->get_customer_note(),
+		'subtotal'          => (float) $order->get_subtotal(),
+		'shipping_total'    => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+		'fees_total'        => (float) $order->get_total_fees(),
+		'total_tax'         => (float) $order->get_total_tax(),
+		'discount_total'    => (float) $order->get_discount_total(),
+		'grand_total'       => (float) $order->get_total(),
+		'items'             => $items,
+		'deposit_items'     => $deposit_items,
 	];
 }
 
@@ -205,7 +257,8 @@ function cmbwc_preview_bon_page() {
 
 /**
  * Knapper i ordrelisten.
- * Preview åbner i ny fane.
+ * Bemærk: target virker ikke altid i WooCommerce's renderer,
+ * men vi sætter det på hvor muligt.
  */
 add_filter( 'woocommerce_admin_order_actions', 'cmbwc_add_list_table_order_actions', 20, 2 );
 
@@ -269,7 +322,8 @@ function cmbwc_manual_print_bon_handler() {
 }
 
 /**
- * Ekstra "Vis BON" knap på ordresiden, som åbner i ny fane.
+ * Rigtig preview-knap på ordresiden.
+ * Denne åbner i ny fane.
  */
 add_action( 'woocommerce_order_item_add_action_buttons', 'cmbwc_add_preview_button_on_order_edit' );
 
@@ -278,10 +332,16 @@ function cmbwc_add_preview_button_on_order_edit( $order ) {
 		return;
 	}
 
-	$url = wp_nonce_url(
+	$preview_url = wp_nonce_url(
 		admin_url( 'admin-post.php?action=cmbwc_preview_bon&order_id=' . $order->get_id() ),
 		'cmbwc_preview_bon_' . $order->get_id()
 	);
 
-	echo '<a href="' . esc_url( $url ) . '" target="_blank" class="button" style="margin-left:8px;">Vis BON</a>';
+	$print_url = wp_nonce_url(
+		admin_url( 'admin-post.php?action=cmbwc_manual_print_bon&order_id=' . $order->get_id() ),
+		'cmbwc_manual_print_bon_' . $order->get_id()
+	);
+
+	echo '<a href="' . esc_url( $preview_url ) . '" target="_blank" rel="noopener" class="button" style="margin-left:8px;">Vis BON</a>';
+	echo '<a href="' . esc_url( $print_url ) . '" class="button" style="margin-left:8px;">Print BON</a>';
 }
