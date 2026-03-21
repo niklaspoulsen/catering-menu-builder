@@ -34,6 +34,15 @@ function cmbwc_register_admin_menu() {
 		'cmbwc-production-overview',
 		'cmbwc_render_production_overview_page'
 	);
+
+	add_submenu_page(
+		'cmbwc-catering',
+		'Print / Bonner',
+		'Print / Bonner',
+		'manage_woocommerce',
+		'cmbwc-print-settings',
+		'cmbwc_render_print_settings_page'
+	);
 }
 
 function cmbwc_render_admin_welcome_page() {
@@ -45,6 +54,7 @@ function cmbwc_render_admin_welcome_page() {
 		<ul style="list-style:disc; padding-left:18px;">
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-service-options' ) ); ?>">Servicevalg</a></li>
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-production-overview' ) ); ?>">Produktionsoverblik</a></li>
+			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-print-settings' ) ); ?>">Print / Bonner</a></li>
 		</ul>
 	</div>
 	<?php

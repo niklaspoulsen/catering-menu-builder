@@ -9,13 +9,27 @@ if ( ! isset( $order ) || ! is_a( $order, 'WC_Order' ) ) {
 	return;
 }
 
-$data = cmbwc_get_order_bon_data( $order );
+$data     = cmbwc_get_order_bon_data( $order );
+$settings = isset( $data['settings'] ) && is_array( $data['settings'] ) ? $data['settings'] : array();
+
+$paper_width = isset( $settings['paper_width_mm'] ) ? (int) $settings['paper_width_mm'] : 80;
+$paper_width = in_array( $paper_width, array( 58, 80 ), true ) ? $paper_width : 80;
+
+$content_width = ( 58 === $paper_width ) ? 50 : 72;
+$font_size     = ( 58 === $paper_width ) ? 10 : 11;
+$title_size    = ( 58 === $paper_width ) ? 18 : 22;
+$time_size     = ( 58 === $paper_width ) ? 18 : 22;
+
+$store_name = ! empty( $settings['store_name'] ) ? $settings['store_name'] : get_bloginfo( 'name' );
+$headline   = ! empty( $settings['headline'] ) ? $settings['headline'] : 'KØKKENBON';
+
+$is_pickup = ( isset( $data['delivery_type'] ) && 'Afhent selv' === $data['delivery_type'] );
 ?>
 
 <style>
 @page {
-	size: 80mm auto;
-	margin: 4mm;
+	size: <?php echo esc_html( $paper_width ); ?>mm auto;
+	margin: 2mm;
 }
 
 html,
@@ -25,7 +39,7 @@ body {
 	background: #fff;
 	color: #000;
 	font-family: Arial, Helvetica, sans-serif;
-	font-size: 11px;
+	font-size: <?php echo esc_html( $font_size ); ?>px;
 	line-height: 1.35;
 }
 
@@ -34,7 +48,7 @@ body {
 }
 
 .bon {
-	width: 72mm;
+	width: <?php echo esc_html( $content_width ); ?>mm;
 	margin: 0 auto;
 	padding: 2mm 0;
 }
@@ -44,11 +58,18 @@ body {
 	margin-bottom: 8px;
 }
 
+.store-name {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+}
+
 .bon-title {
-	font-size: 22px;
+	font-size: <?php echo esc_html( $title_size ); ?>px;
 	font-weight: 700;
 	letter-spacing: 0.4px;
-	margin-bottom: 2px;
+	margin: 2px 0 0;
 }
 
 .rule {
@@ -76,6 +97,15 @@ body {
 	font-size: 11px;
 	font-weight: 700;
 	letter-spacing: 0.4px;
+	text-transform: uppercase;
+}
+
+.delivery-type {
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1.1;
+	margin-top: 4px;
+	text-transform: uppercase;
 }
 
 .delivery-date {
@@ -86,7 +116,7 @@ body {
 }
 
 .delivery-time {
-	font-size: 22px;
+	font-size: <?php echo esc_html( $time_size ); ?>px;
 	font-weight: 700;
 	line-height: 1.1;
 	margin-top: 4px;
@@ -186,6 +216,12 @@ body {
 	font-size: 10px;
 }
 
+.status-line {
+	font-size: 10px;
+	margin-top: 6px;
+	text-align: center;
+}
+
 .print-actions {
 	margin: 12px 0;
 	text-align: center;
@@ -210,27 +246,37 @@ body {
 	</div>
 
 	<div class="bon-header">
-		<div class="bon-title">#<?php echo esc_html( $data['order_number'] ); ?></div>
+		<?php if ( ! empty( $store_name ) ) : ?>
+			<div class="store-name"><?php echo esc_html( $store_name ); ?></div>
+		<?php endif; ?>
+		<div class="bon-title"><?php echo esc_html( $headline ); ?></div>
 	</div>
 
 	<div class="meta-row">
-		<span class="meta-label">Oprettet:</span>
-		<?php echo esc_html( $data['created'] ); ?>
+		<span class="meta-label">Ordre:</span>
+		#<?php echo esc_html( $data['order_number'] ); ?>
 	</div>
+
+	<?php if ( 'yes' === ( $settings['show_created'] ?? 'yes' ) && ! empty( $data['created'] ) ) : ?>
+		<div class="meta-row">
+			<span class="meta-label">Oprettet:</span>
+			<?php echo esc_html( $data['created'] ); ?>
+		</div>
+	<?php endif; ?>
 
 	<div class="meta-row">
 		<span class="meta-label">Kunde:</span>
 		<?php echo esc_html( $data['customer'] ?: '-' ); ?>
 	</div>
 
-	<?php if ( ! empty( $data['company'] ) ) : ?>
+	<?php if ( 'yes' === ( $settings['show_company'] ?? 'yes' ) && ! empty( $data['company'] ) ) : ?>
 		<div class="meta-row">
 			<span class="meta-label">Firma:</span>
 			<?php echo esc_html( $data['company'] ); ?>
 		</div>
 	<?php endif; ?>
 
-	<?php if ( ! empty( $data['phone'] ) ) : ?>
+	<?php if ( 'yes' === ( $settings['show_phone'] ?? 'yes' ) && ! empty( $data['phone'] ) ) : ?>
 		<div class="meta-row">
 			<span class="meta-label">Tlf:</span>
 			<?php echo esc_html( $data['phone'] ); ?>
@@ -238,7 +284,8 @@ body {
 	<?php endif; ?>
 
 	<div class="delivery-box">
-		<div class="delivery-label">LEVERING</div>
+		<div class="delivery-label"><?php echo $is_pickup ? 'UDLEVERING' : 'LEVERING'; ?></div>
+		<div class="delivery-type"><?php echo esc_html( $data['delivery_type'] ?: '-' ); ?></div>
 		<div class="delivery-date">
 			<?php
 			echo esc_html(
@@ -251,14 +298,14 @@ body {
 		<div class="delivery-time"><?php echo esc_html( $data['delivery_time'] ?: '-' ); ?></div>
 	</div>
 
-	<?php if ( ! empty( $data['shipping_method'] ) ) : ?>
+	<?php if ( 'yes' === ( $settings['show_shipping_method'] ?? 'yes' ) && ! empty( $data['shipping_method'] ) ) : ?>
 		<div class="meta-row">
-			<span class="meta-label">Levering:</span>
+			<span class="meta-label">Metode:</span>
 			<?php echo esc_html( $data['shipping_method'] ); ?>
 		</div>
 	<?php endif; ?>
 
-	<?php if ( ! empty( $data['shipping_address'] ) ) : ?>
+	<?php if ( ! $is_pickup && 'yes' === ( $settings['show_shipping_address'] ?? 'yes' ) && ! empty( $data['shipping_address'] ) ) : ?>
 		<div class="address-box">
 			<div class="meta-label">Leveringsadresse</div>
 			<div><?php echo wp_kses_post( nl2br( $data['shipping_address'] ) ); ?></div>
@@ -289,7 +336,7 @@ body {
 					</div>
 				<?php endif; ?>
 
-				<?php if ( ! empty( $item['included'] ) ) : ?>
+				<?php if ( 'yes' === ( $settings['show_included'] ?? 'yes' ) && ! empty( $item['included'] ) ) : ?>
 					<div class="item-block">
 						<div class="item-block-title">Indhold</div>
 						<ul class="item-list">
@@ -300,7 +347,7 @@ body {
 					</div>
 				<?php endif; ?>
 
-				<?php if ( ! empty( $item['addons'] ) ) : ?>
+				<?php if ( 'yes' === ( $settings['show_addons'] ?? 'yes' ) && ! empty( $item['addons'] ) ) : ?>
 					<div class="item-block">
 						<div class="item-block-title">Tilvalg</div>
 						<ul class="item-list">
@@ -311,10 +358,19 @@ body {
 					</div>
 				<?php endif; ?>
 
-				<?php if ( ! empty( $item['service'] ) ) : ?>
+				<?php if ( 'yes' === ( $settings['show_service'] ?? 'no' ) && ! empty( $item['service'] ) ) : ?>
 					<div class="item-block">
 						<div class="item-block-title">Service</div>
 						<div><?php echo esc_html( $item['service'] ); ?></div>
+					</div>
+				<?php endif; ?>
+
+				<?php if ( 'yes' === ( $settings['show_prices'] ?? 'no' ) ) : ?>
+					<div class="item-block">
+						<div class="total-row">
+							<span>Linjetotal</span>
+							<span><?php echo wp_kses_post( cmbwc_bon_price( $item['line_total'], $order ) ); ?></span>
+						</div>
 					</div>
 				<?php endif; ?>
 
@@ -325,27 +381,33 @@ body {
 		<div class="small-muted">Ingen produktlinjer fundet.</div>
 	<?php endif; ?>
 
-	<?php if ( ! empty( $data['order_note'] ) ) : ?>
+	<?php if ( 'yes' === ( $settings['show_order_note'] ?? 'yes' ) && ! empty( $data['order_note'] ) ) : ?>
 		<div class="section-title">Kundebemærkning</div>
 		<div class="note-box"><?php echo esc_html( $data['order_note'] ); ?></div>
 	<?php endif; ?>
 
-	<div class="section-title">Pris</div>
-	<div class="totals">
-		<?php if ( ! empty( $data['deposit_items'] ) ) : ?>
-			<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
-				<div class="total-row">
-					<span><?php echo esc_html( $deposit_item['display_name'] ); ?></span>
-					<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['amount'], $order ) ); ?></span>
-				</div>
-			<?php endforeach; ?>
-		<?php endif; ?>
+	<?php if ( 'yes' === ( $settings['show_prices'] ?? 'no' ) ) : ?>
+		<div class="section-title">Pris</div>
+		<div class="totals">
+			<?php if ( ! empty( $data['deposit_items'] ) ) : ?>
+				<?php foreach ( $data['deposit_items'] as $deposit_item ) : ?>
+					<div class="total-row">
+						<span><?php echo esc_html( $deposit_item['display_name'] ); ?></span>
+						<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['amount'], $order ) ); ?></span>
+					</div>
+				<?php endforeach; ?>
+			<?php endif; ?>
 
-		<div class="total-row grand">
-			<span>
-				<?php echo ! empty( $data['has_deposit'] ) ? 'Total inkl. depositum' : 'Total'; ?>
-			</span>
-			<span><?php echo wp_kses_post( cmbwc_bon_price( $data['grand_total'], $order ) ); ?></span>
+			<div class="total-row grand">
+				<span>
+					<?php echo ! empty( $data['has_deposit'] ) ? 'Total inkl. depositum' : 'Total'; ?>
+				</span>
+				<span><?php echo wp_kses_post( cmbwc_bon_price( $data['grand_total'], $order ) ); ?></span>
+			</div>
 		</div>
-	</div>
+	<?php endif; ?>
+
+	<?php if ( ! empty( $data['printed'] ) && ! empty( $data['printed_at'] ) ) : ?>
+		<div class="status-line">Tidligere printet: <?php echo esc_html( $data['printed_at'] ); ?></div>
+	<?php endif; ?>
 </div>

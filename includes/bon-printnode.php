@@ -112,6 +112,40 @@ function cmbwc_bon_format_delivery_date( $date_string ) {
 }
 
 /**
+ * Leveringstype.
+ */
+if ( ! function_exists( 'cmbwc_get_order_delivery_type_label' ) ) {
+	function cmbwc_get_order_delivery_type_label( $order ) {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return '-';
+		}
+
+		$method_title = trim( (string) $order->get_shipping_method() );
+
+		if ( '' === $method_title ) {
+			return 'Afhent selv';
+		}
+
+		$normalized = function_exists( 'mb_strtolower' ) ? mb_strtolower( $method_title ) : strtolower( $method_title );
+
+		$pickup_keywords = array(
+			'local pickup',
+			'pickup',
+			'afhent',
+			'afhentning',
+		);
+
+		foreach ( $pickup_keywords as $keyword ) {
+			if ( false !== strpos( $normalized, $keyword ) ) {
+				return 'Afhent selv';
+			}
+		}
+
+		return 'Levering';
+	}
+}
+
+/**
  * Udregner evt. service/depositum-linje fra en ordrelinje.
  */
 function cmbwc_bon_get_deposit_line_from_item( $item ) {
@@ -167,6 +201,19 @@ function cmbwc_unmark_order_bon_printed( $order_id ) {
 	delete_post_meta( $order_id, '_cmbwc_bon_printed_at' );
 }
 
+function cmbwc_get_order_bon_printed_at( $order_id ) {
+	return (string) get_post_meta( $order_id, '_cmbwc_bon_printed_at', true );
+}
+
+/**
+ * Tjek om PrintNode-plugin er tilgængeligt.
+ */
+function cmbwc_can_use_printnode() {
+	global $woocommerce_simba_printorders_printnode;
+
+	return is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' );
+}
+
 /**
  * Samler alle data til BON.
  */
@@ -216,11 +263,14 @@ function cmbwc_get_order_bon_data( $order ) {
 	}
 
 	$delivery_date_raw = (string) $order->get_meta( '_delivery_date' );
+	$delivery_type     = cmbwc_get_order_delivery_type_label( $order );
+	$settings          = function_exists( 'cmbwc_get_print_settings' ) ? cmbwc_get_print_settings() : array();
 
 	return array(
 		'order_id'                => $order->get_id(),
 		'order_number'            => $order->get_order_number(),
 		'created'                 => $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '',
+		'delivery_type'           => $delivery_type,
 		'delivery_date'           => $delivery_date_raw,
 		'delivery_date_formatted' => cmbwc_bon_format_delivery_date( $delivery_date_raw ),
 		'delivery_time'           => (string) $order->get_meta( '_delivery_time' ),
@@ -240,6 +290,9 @@ function cmbwc_get_order_bon_data( $order ) {
 		'items'                   => $items,
 		'deposit_items'           => $deposit_items,
 		'has_deposit'             => ! empty( $deposit_items ),
+		'printed'                 => cmbwc_is_order_bon_printed( $order->get_id() ),
+		'printed_at'              => cmbwc_get_order_bon_printed_at( $order->get_id() ),
+		'settings'                => $settings,
 	);
 }
 
@@ -259,10 +312,16 @@ function cmbwc_hide_internal_order_item_meta( $hidden ) {
 
 /**
  * PrintNode template override.
+ *
+ * Her overtager vi "Simple order summary"-templaten og bruger vores egen BON.
  */
 add_filter( 'woocommerce_printorders_printnode_print_template', 'cmbwc_printnode_template_override', 10, 2 );
 
 function cmbwc_printnode_template_override( $template, $order = null ) {
+	if ( 'yes' !== cmbwc_get_print_setting( 'enabled', 'yes' ) ) {
+		return $template;
+	}
+
 	$custom = CMBWC_PATH . 'templates/printnode-bon.php';
 
 	if ( file_exists( $custom ) ) {
@@ -307,12 +366,7 @@ function cmbwc_order_action_print_bon( $order ) {
 		return;
 	}
 
-	global $woocommerce_simba_printorders_printnode;
-
-	if ( is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' ) ) {
-		$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order->get_id() );
-		cmbwc_mark_order_bon_printed( $order->get_id() );
-	}
+	cmbwc_send_order_to_printnode( $order->get_id() );
 }
 
 /**
@@ -410,6 +464,31 @@ function cmbwc_force_order_list_preview_blank_target() {
 }
 
 /**
+ * Send ordre til PrintNode.
+ */
+function cmbwc_send_order_to_printnode( $order_id ) {
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id ) {
+		return false;
+	}
+
+	if ( ! cmbwc_can_use_printnode() ) {
+		return false;
+	}
+
+	global $woocommerce_simba_printorders_printnode;
+
+	$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id );
+
+	if ( 'yes' === cmbwc_get_print_setting( 'auto_mark_printed', 'yes' ) ) {
+		cmbwc_mark_order_bon_printed( $order_id );
+	}
+
+	return true;
+}
+
+/**
  * Manuel print fra ordrelisten / produktionsoverblik.
  */
 add_action( 'admin_post_cmbwc_manual_print_bon', 'cmbwc_manual_print_bon_handler' );
@@ -427,14 +506,12 @@ function cmbwc_manual_print_bon_handler() {
 
 	check_admin_referer( 'cmbwc_manual_print_bon_' . $order_id );
 
-	global $woocommerce_simba_printorders_printnode;
+	$ok = cmbwc_send_order_to_printnode( $order_id );
 
-	if ( is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' ) ) {
-		$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id );
-		cmbwc_mark_order_bon_printed( $order_id );
-	}
+	$redirect = wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php?post_type=shop_order' );
+	$redirect = add_query_arg( 'cmbwc_printnode_status', $ok ? 'sent' : 'missing', $redirect );
 
-	wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'edit.php?post_type=shop_order' ) );
+	wp_safe_redirect( $redirect );
 	exit;
 }
 
@@ -460,4 +537,75 @@ function cmbwc_add_preview_button_on_order_edit( $order ) {
 
 	echo '<a href="' . esc_url( $preview_url ) . '" target="_blank" rel="noopener" class="button" style="margin-left:8px;">Vis BON</a>';
 	echo '<a href="' . esc_url( $print_url ) . '" class="button" style="margin-left:8px;">Print BON</a>';
+}
+
+/**
+ * Metabox med printstatus.
+ */
+add_action( 'add_meta_boxes', 'cmbwc_register_print_status_metabox' );
+
+function cmbwc_register_print_status_metabox() {
+	add_meta_box(
+		'cmbwc-print-status',
+		'BON / Printstatus',
+		'cmbwc_render_print_status_metabox',
+		'shop_order',
+		'side',
+		'default'
+	);
+}
+
+function cmbwc_render_print_status_metabox( $post ) {
+	$order = wc_get_order( $post->ID );
+
+	if ( ! $order ) {
+		echo '<p>Ordre ikke fundet.</p>';
+		return;
+	}
+
+	$is_printed = cmbwc_is_order_bon_printed( $order->get_id() );
+	$printed_at = cmbwc_get_order_bon_printed_at( $order->get_id() );
+
+	echo '<p><strong>Status:</strong> ' . ( $is_printed ? '<span style="color:#137333;">Printet</span>' : '<span style="color:#b32d2e;">Ikke printet</span>' ) . '</p>';
+
+	if ( $printed_at ) {
+		echo '<p><strong>Sidst printet:</strong><br>' . esc_html( $printed_at ) . '</p>';
+	}
+
+	if ( cmbwc_can_use_printnode() ) {
+		$print_url = wp_nonce_url(
+			admin_url( 'admin-post.php?action=cmbwc_manual_print_bon&order_id=' . $order->get_id() ),
+			'cmbwc_manual_print_bon_' . $order->get_id()
+		);
+
+		echo '<p><a class="button button-primary" href="' . esc_url( $print_url ) . '">Print BON nu</a></p>';
+	} else {
+		echo '<p style="color:#b32d2e;">PrintNode-plugin eller metode blev ikke fundet.</p>';
+	}
+
+	$preview_url = wp_nonce_url(
+		admin_url( 'admin-post.php?action=cmbwc_preview_bon&order_id=' . $order->get_id() ),
+		'cmbwc_preview_bon_' . $order->get_id()
+	);
+
+	echo '<p><a class="button" target="_blank" rel="noopener" href="' . esc_url( $preview_url ) . '">Vis BON</a></p>';
+}
+
+/**
+ * Admin-notices efter manuelt print.
+ */
+add_action( 'admin_notices', 'cmbwc_printnode_admin_notices' );
+
+function cmbwc_printnode_admin_notices() {
+	if ( ! is_admin() || ! isset( $_GET['cmbwc_printnode_status'] ) ) {
+		return;
+	}
+
+	$status = sanitize_text_field( wp_unslash( $_GET['cmbwc_printnode_status'] ) );
+
+	if ( 'sent' === $status ) {
+		echo '<div class="notice notice-success is-dismissible"><p>Printjob sendt til PrintNode.</p></div>';
+	} elseif ( 'missing' === $status ) {
+		echo '<div class="notice notice-error is-dismissible"><p>PrintNode kunne ikke bruges. Tjek at PrintNode-pluginet er aktivt, at printeren er enabled, og at Simple order summary er valgt.</p></div>';
+	}
 }
