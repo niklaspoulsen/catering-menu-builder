@@ -75,7 +75,7 @@ function cmbwc_bon_price( $amount, $order = null ) {
 
 /**
  * Formater leveringdato pænt og tydeligt.
- * Eksempel: FREDAG D. 13/03 2026
+ * Eksempel: MANDAG D. 16/03 2026
  */
 function cmbwc_bon_format_delivery_date( $date_string ) {
 	$date_string = trim( (string) $date_string );
@@ -84,7 +84,27 @@ function cmbwc_bon_format_delivery_date( $date_string ) {
 		return '';
 	}
 
-	$timestamp = strtotime( $date_string );
+	$timestamp = false;
+
+	$formats = array(
+		'd/m/Y',
+		'd-m-Y',
+		'Y-m-d',
+		'Y/m/d',
+		'd.m.Y',
+	);
+
+	foreach ( $formats as $format ) {
+		$date = DateTime::createFromFormat( $format, $date_string );
+		if ( $date instanceof DateTime ) {
+			$timestamp = $date->getTimestamp();
+			break;
+		}
+	}
+
+	if ( ! $timestamp ) {
+		$timestamp = strtotime( $date_string );
+	}
 
 	if ( ! $timestamp ) {
 		return $date_string;
@@ -257,10 +277,31 @@ function cmbwc_get_order_bon_data( $order ) {
 		$customer = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
 	}
 
-	$shipping_address = $order->get_formatted_shipping_address();
-	if ( '' === trim( wp_strip_all_tags( $shipping_address ) ) ) {
-		$shipping_address = $order->get_formatted_billing_address();
+	$shipping_address = $order->get_address( 'shipping' );
+	if ( empty( array_filter( $shipping_address ) ) ) {
+		$shipping_address = $order->get_address( 'billing' );
 	}
+
+	$address_lines = array();
+
+	if ( ! empty( $shipping_address['address_1'] ) ) {
+		$address_lines[] = $shipping_address['address_1'];
+	}
+	if ( ! empty( $shipping_address['address_2'] ) ) {
+		$address_lines[] = $shipping_address['address_2'];
+	}
+
+	$city_line = trim(
+		( ! empty( $shipping_address['postcode'] ) ? $shipping_address['postcode'] : '' ) .
+		' ' .
+		( ! empty( $shipping_address['city'] ) ? $shipping_address['city'] : '' )
+	);
+
+	if ( '' !== trim( $city_line ) ) {
+		$address_lines[] = $city_line;
+	}
+
+	$shipping_address = implode( "\n", $address_lines );
 
 	$delivery_date_raw = (string) $order->get_meta( '_delivery_date' );
 	$delivery_type     = cmbwc_get_order_delivery_type_label( $order );
