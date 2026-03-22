@@ -73,6 +73,73 @@ function cmbwc_get_service_price_suffix( $service_data ) {
 	return 'per_cover' === $price_type ? 'pr. kuvert' : 'fast pris';
 }
 
+function cmbwc_get_product_allowed_weekdays( $product_id ) {
+	$raw = get_post_meta( $product_id, '_wcr_allowed_weekdays', true );
+
+	if ( empty( $raw ) ) {
+		return array();
+	}
+
+	if ( is_array( $raw ) ) {
+		$values = $raw;
+	} else {
+		$values = array_map( 'trim', explode( ',', (string) $raw ) );
+	}
+
+	$clean = array();
+
+	foreach ( $values as $day ) {
+		$day = (string) $day;
+		if ( in_array( $day, array( '0', '1', '2', '3', '4', '5', '6' ), true ) ) {
+			$clean[] = $day;
+		}
+	}
+
+	$clean = array_values( array_unique( $clean ) );
+
+	usort(
+		$clean,
+		function( $a, $b ) {
+			$order = array( '1', '2', '3', '4', '5', '6', '0' );
+			return array_search( $a, $order, true ) <=> array_search( $b, $order, true );
+		}
+	);
+
+	return $clean;
+}
+
+function cmbwc_get_product_ordering_text( $product_id ) {
+	$days = cmbwc_get_product_allowed_weekdays( $product_id );
+
+	$labels = array(
+		'1' => 'mandag',
+		'2' => 'tirsdag',
+		'3' => 'onsdag',
+		'4' => 'torsdag',
+		'5' => 'fredag',
+		'6' => 'lørdag',
+		'0' => 'søndag',
+	);
+
+	if ( empty( $days ) ) {
+		return 'Alle dage';
+	}
+
+	$selected = array();
+
+	foreach ( $days as $day ) {
+		if ( isset( $labels[ $day ] ) ) {
+			$selected[] = $labels[ $day ];
+		}
+	}
+
+	if ( empty( $selected ) ) {
+		return 'Alle dage';
+	}
+
+	return implode( ', ', $selected );
+}
+
 function cmbwc_shortcode_menu_info() {
 	$product = cmbwc_get_current_product();
 
@@ -83,17 +150,7 @@ function cmbwc_shortcode_menu_info() {
 	$product_id     = $product->get_id();
 	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
 	$lead_time      = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
-	$ordering_text  = '';
-
-	if ( class_exists( 'WCR_Product_Rules' ) && method_exists( 'WCR_Product_Rules', 'get_frontend_ordering_text' ) ) {
-		$ordering_text = WCR_Product_Rules::get_frontend_ordering_text( $product_id );
-	}
-
-	if ( empty( $ordering_text ) ) {
-		$ordering_text = 'Kan bestilles: Alle dage';
-	}
-
-	$ordering_text = preg_replace( '/^Kan bestilles:\s*/i', '', $ordering_text );
+	$ordering_text  = cmbwc_get_product_ordering_text( $product_id );
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -144,6 +201,7 @@ function cmbwc_shortcode_menu_contents() {
 	$grouped = array();
 
 	foreach ( $included_products as $included_product_id ) {
+		$included_product_id = absint( $included_products_id ?? $included_product_id );
 		$included_product_id = absint( $included_product_id );
 		$included_product    = wc_get_product( $included_product_id );
 
