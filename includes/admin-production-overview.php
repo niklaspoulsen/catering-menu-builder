@@ -279,8 +279,8 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 				$item_name = trim( (string) $item->get_name() );
 				$item_qty  = (int) $item->get_quantity();
 				$covers    = absint( $item->get_meta( 'Kuverter', true ) );
-				$addons    = trim( (string) $item->get_meta( 'Tilvalg', true ) );
-				$service   = trim( (string) $item->get_meta( 'Service', true ) );
+				$addons    = trim( (string) $item->get_meta( 'Valgte tilvalg', true ) );
+				$service   = trim( (string) $item->get_meta( 'Valgt service', true ) );
 
 				if ( $covers > 0 ) {
 					$covers_total += $covers;
@@ -311,7 +311,15 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 				}
 
 				if ( '' !== $service ) {
-					$service_output[] = $service;
+					$service_lines = preg_split( '/\r\n|\r|\n/', $service );
+
+					foreach ( $service_lines as $service_line ) {
+						$service_line = trim( $service_line );
+
+						if ( '' !== $service_line ) {
+							$service_output[] = $service_line;
+						}
+					}
 				}
 			}
 
@@ -358,87 +366,41 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 				'status'          => wc_get_order_status_name( $order->get_status() ),
 				'items'           => $items_output,
 				'addons'          => array_values( array_unique( $addons_output ) ),
-				'customer_note'   => (string) $order->get_customer_note(),
-				'shipping_method' => (string) $order->get_shipping_method(),
-				'is_printed'      => $is_printed ? 'Ja' : 'Nej',
+				'admin_order_url' => admin_url( 'post.php?post=' . $order->get_id() . '&action=edit' ),
 			);
 
 			$rows[] = array(
-				'order_id'            => $order->get_id(),
-				'order_number'        => $order->get_order_number(),
-				'order_edit_url'      => admin_url( 'admin.php?page=wc-orders&action=edit&id=' . $order->get_id() ),
-				'preview_url'         => $preview_url,
-				'print_url'           => $print_url,
-				'mark_printed_url'    => $mark_printed_url,
-				'reset_printed_url'   => $reset_printed_url,
-				'delivery_date'       => $delivery_date_raw,
-				'delivery_date_ymd'   => $delivery_date_ymd,
-				'delivery_date_label' => cmbwc_get_production_date_label( $delivery_date_raw ),
-				'delivery_time'       => $delivery_time,
-				'delivery_sort'       => cmbwc_get_production_sort_datetime( $delivery_date_ymd, $delivery_time, $order ),
-				'created_sort'        => $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0,
-				'customer'            => $customer,
-				'covers_total'        => $covers_total,
-				'delivery_type'       => cmbwc_get_order_delivery_type_label( $order ),
-				'status'              => wc_get_order_status_name( $order->get_status() ),
-				'is_printed'          => $is_printed,
-				'quick_data'          => $quick_data,
+				'order_id'           => $order->get_id(),
+				'order_number'       => $order->get_order_number(),
+				'status'             => $order->get_status(),
+				'status_label'       => wc_get_order_status_name( $order->get_status() ),
+				'customer'           => $customer,
+				'delivery_date'      => $delivery_date_raw,
+				'delivery_date_ymd'  => $delivery_date_ymd,
+				'delivery_date_label'=> cmbwc_get_production_date_label( $delivery_date_raw ),
+				'delivery_time'      => $delivery_time,
+				'delivery_type'      => cmbwc_get_order_delivery_type_label( $order ),
+				'covers_total'       => $covers_total,
+				'items'              => $items_output,
+				'addons'             => array_values( array_unique( $addons_output ) ),
+				'service'            => array_values( array_unique( $service_output ) ),
+				'preview_url'        => $preview_url,
+				'print_url'          => $print_url,
+				'mark_printed_url'   => $mark_printed_url,
+				'reset_printed_url'  => $reset_printed_url,
+				'admin_order_url'    => admin_url( 'post.php?post=' . $order->get_id() . '&action=edit' ),
+				'is_printed'         => $is_printed,
+				'quick_data'         => $quick_data,
+				'delivery_sort'      => cmbwc_get_production_sort_datetime( $delivery_date_ymd, $delivery_time, $order ),
+				'created_sort'       => $order->get_date_created() ? $order->get_date_created()->getTimestamp() : 0,
 			);
 		}
 
-		usort( $rows, 'cmbwc_sort_production_rows' );
+		if ( ! empty( $rows ) ) {
+			usort( $rows, 'cmbwc_sort_production_rows' );
+		}
 
 		return $rows;
-	}
-}
-
-if ( ! function_exists( 'cmbwc_mark_bon_printed_handler' ) ) {
-	add_action( 'admin_post_cmbwc_mark_bon_printed', 'cmbwc_mark_bon_printed_handler' );
-
-	function cmbwc_mark_bon_printed_handler() {
-		if ( ! current_user_can( 'edit_shop_orders' ) && ! current_user_can( 'manage_woocommerce' ) ) {
-			wp_die( 'Ingen adgang.' );
-		}
-
-		$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
-
-		if ( ! $order_id ) {
-			wp_die( 'Manglende ordre-id.' );
-		}
-
-		check_admin_referer( 'cmbwc_mark_bon_printed_' . $order_id );
-
-		if ( function_exists( 'cmbwc_mark_order_bon_printed' ) ) {
-			cmbwc_mark_order_bon_printed( $order_id );
-		}
-
-		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'admin.php?page=cmbwc-production-overview' ) );
-		exit;
-	}
-}
-
-if ( ! function_exists( 'cmbwc_reset_bon_printed_handler' ) ) {
-	add_action( 'admin_post_cmbwc_reset_bon_printed', 'cmbwc_reset_bon_printed_handler' );
-
-	function cmbwc_reset_bon_printed_handler() {
-		if ( ! current_user_can( 'edit_shop_orders' ) && ! current_user_can( 'manage_woocommerce' ) ) {
-			wp_die( 'Ingen adgang.' );
-		}
-
-		$order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
-
-		if ( ! $order_id ) {
-			wp_die( 'Manglende ordre-id.' );
-		}
-
-		check_admin_referer( 'cmbwc_reset_bon_printed_' . $order_id );
-
-		if ( function_exists( 'cmbwc_unmark_order_bon_printed' ) ) {
-			cmbwc_unmark_order_bon_printed( $order_id );
-		}
-
-		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'admin.php?page=cmbwc-production-overview' ) );
-		exit;
 	}
 }
 
@@ -448,18 +410,14 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 			return;
 		}
 
-		$preset    = isset( $_GET['preset'] ) ? sanitize_text_field( wp_unslash( $_GET['preset'] ) ) : '';
+		$preset    = isset( $_GET['preset'] ) ? sanitize_text_field( wp_unslash( $_GET['preset'] ) ) : 'upcoming';
 		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '';
 		$date_to   = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
 
-		if ( in_array( $preset, array( 'today', 'week', 'month' ), true ) ) {
+		if ( '' === $date_from && '' === $date_to ) {
 			$preset_dates = cmbwc_get_production_preset_dates( $preset );
 			$date_from    = $preset_dates['date_from'];
 			$date_to      = $preset_dates['date_to'];
-		} elseif ( '' === $date_from && '' === $date_to ) {
-			$defaults  = cmbwc_get_production_preset_dates( '' );
-			$date_from = $defaults['date_from'];
-			$date_to   = $defaults['date_to'];
 		}
 
 		$rows    = cmbwc_get_production_orders(
@@ -470,250 +428,113 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 		);
 		$grouped = cmbwc_group_production_rows_by_date( $rows );
 
-		$base_url = admin_url( 'admin.php?page=cmbwc-production-overview' );
 		?>
 		<div class="wrap">
-			<h1>Produktionsoverblik</h1>
+			<h1>Produktionsoversigt</h1>
 
-			<style>
-				.cmbwc-po-badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:600; line-height:1.2; white-space:nowrap; }
-				.cmbwc-po-badge-delivery { background:#e8f1ff; color:#0b57d0; }
-				.cmbwc-po-badge-pickup { background:#e9f7ef; color:#137333; }
-				.cmbwc-po-badge-printed { background:#e9f7ef; color:#137333; }
-				.cmbwc-po-badge-unprinted { background:#fff4e5; color:#8a4b00; }
-				.cmbwc-po-day-summary { display:flex; gap:12px; flex-wrap:wrap; margin:0 0 10px; align-items:center; }
-				.cmbwc-po-summary-box { background:#fff; border:1px solid #ddd; padding:10px 14px; border-radius:6px; font-weight:600; }
-				.cmbwc-po-modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:99998; }
-				.cmbwc-po-modal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:min(760px, calc(100vw - 40px)); max-height:calc(100vh - 40px); overflow:auto; background:#fff; border-radius:8px; box-shadow:0 20px 50px rgba(0,0,0,.25); z-index:99999; }
-				.cmbwc-po-modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid #e5e5e5; }
-				.cmbwc-po-modal-body { padding:18px; }
-				.cmbwc-po-close { border:0; background:transparent; font-size:24px; line-height:1; cursor:pointer; }
-				.cmbwc-po-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px 20px; margin-bottom:16px; }
-				.cmbwc-po-box { background:#fafafa; border:1px solid #e5e5e5; padding:12px; border-radius:6px; }
-				.cmbwc-po-box h4 { margin:0 0 8px; }
-				.cmbwc-po-box ul { margin:0; padding-left:18px; }
-				@media (max-width:782px) {
-					.cmbwc-po-grid { grid-template-columns:1fr; }
-				}
-			</style>
+			<form method="get" style="margin:16px 0;">
+				<input type="hidden" name="page" value="cmbwc-production-overview" />
 
-			<form method="get" style="background:#fff; border:1px solid #ddd; padding:16px; margin:16px 0; max-width:1100px;">
-				<input type="hidden" name="page" value="cmbwc-production-overview">
+				<select name="preset">
+					<option value="today" <?php selected( $preset, 'today' ); ?>>I dag</option>
+					<option value="week" <?php selected( $preset, 'week' ); ?>>Denne uge</option>
+					<option value="month" <?php selected( $preset, 'month' ); ?>>Denne måned</option>
+					<option value="upcoming" <?php selected( $preset, 'upcoming' ); ?>>Kommende</option>
+				</select>
 
-				<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
-					<a class="button <?php echo ( 'today' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'today', $base_url ) ); ?>">I dag</a>
-					<a class="button <?php echo ( 'week' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'week', $base_url ) ); ?>">Denne uge</a>
-					<a class="button <?php echo ( 'month' === $preset ) ? 'button-primary' : ''; ?>" href="<?php echo esc_url( add_query_arg( 'preset', 'month', $base_url ) ); ?>">Denne måned</a>
-					<a class="button" href="<?php echo esc_url( $base_url ); ?>">Nulstil</a>
-				</div>
+				<input type="date" name="date_from" value="<?php echo esc_attr( $date_from ); ?>" />
+				<input type="date" name="date_to" value="<?php echo esc_attr( $date_to ); ?>" />
 
-				<div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
-					<div>
-						<label for="cmbwc-date-from" style="display:block; font-weight:600; margin-bottom:4px;">Fra dato</label>
-						<input type="date" id="cmbwc-date-from" name="date_from" value="<?php echo esc_attr( $date_from ); ?>">
-					</div>
-
-					<div>
-						<label for="cmbwc-date-to" style="display:block; font-weight:600; margin-bottom:4px;">Til dato</label>
-						<input type="date" id="cmbwc-date-to" name="date_to" value="<?php echo esc_attr( $date_to ); ?>">
-					</div>
-
-					<div>
-						<button type="submit" class="button button-primary">Filtrer</button>
-					</div>
-				</div>
+				<button type="submit" class="button button-primary">Filtrer</button>
 			</form>
 
-			<?php if ( empty( $rows ) ) : ?>
-				<div style="background:#fff; border:1px solid #ddd; padding:16px; max-width:1100px;">
-					<p>Ingen cateringordrer fundet i det valgte interval.</p>
-				</div>
+			<?php if ( empty( $grouped ) ) : ?>
+				<p>Ingen ordrer fundet for den valgte periode.</p>
 			<?php else : ?>
-				<?php foreach ( $grouped as $group ) : ?>
-					<?php $next_unprinted = cmbwc_find_next_unprinted_order_in_rows( $group['rows'] ); ?>
-					<div style="margin:0 0 24px;">
-						<h2 style="margin:0 0 10px;"><?php echo esc_html( $group['label'] ); ?></h2>
+				<?php foreach ( $grouped as $date_group ) : ?>
+					<div class="cmbwc-production-date-group" style="margin-bottom:24px;">
+						<h2 style="margin-bottom:8px;">
+							<?php echo esc_html( $date_group['label'] ); ?>
+							<small style="font-weight:400;">
+								- <?php echo esc_html( $date_group['covers_total'] ); ?> kuverter
+							</small>
+						</h2>
 
-						<div class="cmbwc-po-day-summary">
-							<div class="cmbwc-po-summary-box">Samlet kuverter: <?php echo esc_html( (int) $group['covers_total'] ); ?></div>
-							<div class="cmbwc-po-summary-box">Ordrer: <?php echo esc_html( count( $group['rows'] ) ); ?></div>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th>Ordre</th>
+									<th>Kunde</th>
+									<th>Tid</th>
+									<th>Type</th>
+									<th>Kuverter</th>
+									<th>Menuer</th>
+									<th>Tilvalg</th>
+									<th>Service</th>
+									<th>Status</th>
+									<th>Handlinger</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $date_group['rows'] as $row ) : ?>
+									<tr class="<?php echo ! empty( $row['is_printed'] ) ? 'cmbwc-row-printed' : ''; ?>">
+										<td>#<?php echo esc_html( $row['order_number'] ); ?></td>
+										<td><?php echo esc_html( $row['customer'] ); ?></td>
+										<td><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></td>
+										<td><?php echo esc_html( $row['delivery_type'] ); ?></td>
+										<td><?php echo esc_html( $row['covers_total'] ); ?></td>
+										<td>
+											<?php if ( ! empty( $row['items'] ) ) : ?>
+												<ul style="margin:0;">
+													<?php foreach ( $row['items'] as $item_label ) : ?>
+														<li><?php echo esc_html( $item_label ); ?></li>
+													<?php endforeach; ?>
+												</ul>
+											<?php else : ?>
+												-
+											<?php endif; ?>
+										</td>
+										<td>
+											<?php if ( ! empty( $row['addons'] ) ) : ?>
+												<ul style="margin:0;">
+													<?php foreach ( $row['addons'] as $addon_label ) : ?>
+														<li><?php echo esc_html( $addon_label ); ?></li>
+													<?php endforeach; ?>
+												</ul>
+											<?php else : ?>
+												-
+											<?php endif; ?>
+										</td>
+										<td>
+											<?php if ( ! empty( $row['service'] ) ) : ?>
+												<ul style="margin:0;">
+													<?php foreach ( $row['service'] as $service_label ) : ?>
+														<li><?php echo esc_html( $service_label ); ?></li>
+													<?php endforeach; ?>
+												</ul>
+											<?php else : ?>
+												-
+											<?php endif; ?>
+										</td>
+										<td><?php echo esc_html( $row['status_label'] ); ?></td>
+										<td>
+											<a class="button button-small" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener noreferrer">Forhåndsvis</a>
+											<a class="button button-small" href="<?php echo esc_url( $row['print_url'] ); ?>">Print</a>
+											<a class="button button-small" href="<?php echo esc_url( $row['admin_order_url'] ); ?>">Åbn ordre</a>
 
-							<?php if ( ! empty( $next_unprinted ) ) : ?>
-								<a class="button button-primary" href="<?php echo esc_url( $next_unprinted['print_url'] ); ?>">
-									Print næste BON (#<?php echo esc_html( $next_unprinted['order_number'] ); ?>)
-								</a>
-							<?php else : ?>
-								<span class="cmbwc-po-badge cmbwc-po-badge-printed">Alle bonner for denne dag er markeret som printet</span>
-							<?php endif; ?>
-						</div>
-
-						<div style="background:#fff; border:1px solid #ddd; overflow:auto;">
-							<table class="widefat striped" style="border:0; min-width:980px;">
-								<thead>
-									<tr>
-										<th style="width:90px;">Tid</th>
-										<th style="width:90px;">Ordre</th>
-										<th style="width:180px;">Kunde</th>
-										<th style="width:110px;">Kuverter</th>
-										<th style="width:140px;">Leveringstype</th>
-										<th style="width:120px;">Print</th>
-										<th style="width:120px;">Status</th>
-										<th style="width:360px;">Handlinger</th>
+											<?php if ( ! empty( $row['is_printed'] ) ) : ?>
+												<a class="button button-small" href="<?php echo esc_url( $row['reset_printed_url'] ); ?>">Nulstil print</a>
+											<?php else : ?>
+												<a class="button button-small" href="<?php echo esc_url( $row['mark_printed_url'] ); ?>">Marker som printet</a>
+											<?php endif; ?>
+										</td>
 									</tr>
-								</thead>
-								<tbody>
-									<?php foreach ( $group['rows'] as $row ) : ?>
-										<?php
-										$is_pickup = ( 'Afhent selv' === $row['delivery_type'] );
-										$badge_cls = $is_pickup ? 'cmbwc-po-badge-pickup' : 'cmbwc-po-badge-delivery';
-										?>
-										<tr>
-											<td><strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong></td>
-											<td>#<?php echo esc_html( $row['order_number'] ); ?></td>
-											<td><?php echo esc_html( $row['customer'] ); ?></td>
-											<td><?php echo $row['covers_total'] ? esc_html( $row['covers_total'] ) : '-'; ?></td>
-											<td><span class="cmbwc-po-badge <?php echo esc_attr( $badge_cls ); ?>"><?php echo esc_html( $row['delivery_type'] ); ?></span></td>
-											<td>
-												<?php if ( ! empty( $row['is_printed'] ) ) : ?>
-													<span class="cmbwc-po-badge cmbwc-po-badge-printed">Printet</span>
-												<?php else : ?>
-													<span class="cmbwc-po-badge cmbwc-po-badge-unprinted">Ikke printet</span>
-												<?php endif; ?>
-											</td>
-											<td><?php echo esc_html( $row['status'] ); ?></td>
-											<td>
-												<div style="display:flex; gap:8px; flex-wrap:wrap;">
-													<button
-														type="button"
-														class="button button-small cmbwc-open-quick-view"
-														data-order='<?php echo esc_attr( wp_json_encode( $row['quick_data'] ) ); ?>'
-													>Hurtigvisning</button>
-													<a class="button button-small" href="<?php echo esc_url( $row['order_edit_url'] ); ?>">Åbn ordre</a>
-													<a class="button button-small" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener">Vis BON</a>
-													<a class="button button-small" href="<?php echo esc_url( $row['print_url'] ); ?>">Print BON</a>
-
-													<?php if ( ! empty( $row['is_printed'] ) ) : ?>
-														<a class="button button-small" href="<?php echo esc_url( $row['reset_printed_url'] ); ?>">Nulstil print</a>
-													<?php else : ?>
-														<a class="button button-small" href="<?php echo esc_url( $row['mark_printed_url'] ); ?>">Markér som printet</a>
-													<?php endif; ?>
-												</div>
-											</td>
-										</tr>
-									<?php endforeach; ?>
-								</tbody>
-							</table>
-						</div>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
 					</div>
 				<?php endforeach; ?>
 			<?php endif; ?>
-
-			<div class="cmbwc-po-modal-backdrop"></div>
-			<div class="cmbwc-po-modal" role="dialog" aria-modal="true" aria-label="Hurtigvisning af ordre">
-				<div class="cmbwc-po-modal-header">
-					<h2 style="margin:0;">Hurtigvisning</h2>
-					<button type="button" class="cmbwc-po-close" aria-label="Luk">&times;</button>
-				</div>
-				<div class="cmbwc-po-modal-body" id="cmbwc-po-modal-body"></div>
-			</div>
-
-			<script>
-			jQuery(function($){
-				function esc(text) {
-					return $('<div>').text(text == null ? '' : text).html();
-				}
-
-				function listHtml(items) {
-					if (!items || !items.length) {
-						return '<div style="color:#777;">-</div>';
-					}
-
-					var html = '<ul>';
-					items.forEach(function(item){
-						html += '<li>' + esc(item) + '</li>';
-					});
-					html += '</ul>';
-					return html;
-				}
-
-				function badgeHtml(type) {
-					var cls = type === 'Afhent selv' ? 'cmbwc-po-badge-pickup' : 'cmbwc-po-badge-delivery';
-					return '<span class="cmbwc-po-badge ' + cls + '">' + esc(type) + '</span>';
-				}
-
-				function printBadgeHtml(value) {
-					var cls = value === 'Ja' ? 'cmbwc-po-badge-printed' : 'cmbwc-po-badge-unprinted';
-					var label = value === 'Ja' ? 'Printet' : 'Ikke printet';
-					return '<span class="cmbwc-po-badge ' + cls + '">' + label + '</span>';
-				}
-
-				function openModal(data) {
-					var html = '';
-					html += '<div class="cmbwc-po-grid">';
-					html += '<div><strong>Ordre:</strong> #' + esc(data.order_number) + '</div>';
-					html += '<div><strong>Status:</strong> ' + esc(data.status) + '</div>';
-					html += '<div><strong>Kunde:</strong> ' + esc(data.customer) + '</div>';
-					html += '<div><strong>Leveringstype:</strong> ' + badgeHtml(data.delivery_type) + '</div>';
-					html += '<div><strong>Dato:</strong> ' + esc(data.delivery_date) + '</div>';
-					html += '<div><strong>Tid:</strong> ' + esc(data.delivery_time) + '</div>';
-					html += '<div><strong>Kuverter:</strong> ' + esc(data.covers_total ? data.covers_total : '-') + '</div>';
-					html += '<div><strong>Printstatus:</strong> ' + printBadgeHtml(data.is_printed) + '</div>';
-					html += '<div><strong>Leveringsmetode:</strong> ' + esc(data.shipping_method ? data.shipping_method : '-') + '</div>';
-					html += '</div>';
-
-					html += '<div class="cmbwc-po-box" style="margin-bottom:14px;">';
-					html += '<h4>Menu / varer</h4>';
-					html += listHtml(data.items || []);
-					html += '</div>';
-
-					html += '<div class="cmbwc-po-grid">';
-					html += '<div class="cmbwc-po-box">';
-					html += '<h4>Tilvalg</h4>';
-					html += listHtml(data.addons || []);
-					html += '</div>';
-
-					html += '<div class="cmbwc-po-box">';
-					html += '<h4>Service</h4>';
-					html += listHtml(data.service || []);
-					html += '</div>';
-					html += '</div>';
-
-					if (data.customer_note) {
-						html += '<div class="cmbwc-po-box" style="margin-top:14px;">';
-						html += '<h4>Kundebemærkning</h4>';
-						html += '<div>' + esc(data.customer_note).replace(/\n/g, '<br>') + '</div>';
-						html += '</div>';
-					}
-
-					$('#cmbwc-po-modal-body').html(html);
-					$('.cmbwc-po-modal-backdrop, .cmbwc-po-modal').show();
-				}
-
-				function closeModal() {
-					$('.cmbwc-po-modal-backdrop, .cmbwc-po-modal').hide();
-					$('#cmbwc-po-modal-body').empty();
-				}
-
-				$(document).on('click', '.cmbwc-open-quick-view', function(){
-					var raw = $(this).attr('data-order');
-
-					try {
-						var data = JSON.parse(raw);
-						openModal(data);
-					} catch (e) {
-						console.error('Kunne ikke parse ordredata', e);
-					}
-				});
-
-				$(document).on('click', '.cmbwc-po-close, .cmbwc-po-modal-backdrop', closeModal);
-
-				$(document).on('keydown', function(e){
-					if (e.key === 'Escape') {
-						closeModal();
-					}
-				});
-			});
-			</script>
 		</div>
 		<?php
 	}

@@ -323,78 +323,146 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 	return $cart_item;
 }
 
-add_filter( 'woocommerce_get_item_data', 'cmbwc_hide_default_item_data', 10, 2 );
+add_filter( 'woocommerce_get_item_data', 'cmbwc_render_item_data', 10, 2 );
 
-function cmbwc_hide_default_item_data( $item_data, $cart_item ) {
+function cmbwc_render_item_data( $item_data, $cart_item ) {
 	if ( ! empty( $cart_item['cmbwc_data'] ) && is_array( $cart_item['cmbwc_data'] ) ) {
-		return array();
+		$data = $cart_item['cmbwc_data'];
+
+		if ( ! empty( $data['covers'] ) ) {
+			$item_data[] = array(
+				'key'   => 'Kuverter',
+				'value' => absint( $data['covers'] ),
+			);
+		}
+
+		if ( ! empty( $data['included_names'] ) && is_array( $data['included_names'] ) ) {
+			$item_data[] = array(
+				'key'   => 'Indhold',
+				'value' => implode( ', ', array_map( 'wc_clean', $data['included_names'] ) ),
+			);
+		}
+
+		if ( ! empty( $data['group_id'] ) ) {
+			$children = cmbwc_get_cart_children_for_group( $data['group_id'] );
+
+			if ( ! empty( $children['addons'] ) ) {
+				$addon_lines = array();
+
+				foreach ( $children['addons'] as $addon ) {
+					$addon_lines[] = absint( $addon['qty'] ) . ' x ' . $addon['name'];
+				}
+
+				$item_data[] = array(
+					'key'   => 'Valgte tilvalg',
+					'value' => implode( ', ', array_map( 'wc_clean', $addon_lines ) ),
+				);
+			}
+
+			if ( ! empty( $children['services'] ) ) {
+				$service_lines = array();
+
+				foreach ( $children['services'] as $service ) {
+					$service_lines[] = $service['qty'] > 1
+						? absint( $service['qty'] ) . ' x ' . $service['name']
+						: $service['name'];
+				}
+
+				$item_data[] = array(
+					'key'   => 'Valgt service',
+					'value' => implode( ', ', array_map( 'wc_clean', $service_lines ) ),
+				);
+			}
+
+			return $item_data;
+		}
+
+		return $item_data;
 	}
 
 	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
-		return array();
+		$child = $cart_item['cmbwc_child_item'];
+
+		$child_type_label = ! empty( $child['display_type_label'] )
+			? sanitize_text_field( $child['display_type_label'] )
+			: cmbwc_get_child_type_label( isset( $child['child_type'] ) ? $child['child_type'] : '' );
+
+		if ( ! empty( $child_type_label ) ) {
+			$item_data[] = array(
+				'key'   => 'Type',
+				'value' => $child_type_label,
+			);
+		}
+
+		if ( ! empty( $child['parent_name'] ) ) {
+			$item_data[] = array(
+				'key'   => 'Hører til',
+				'value' => sanitize_text_field( $child['parent_name'] ),
+			);
+		}
 	}
 
 	return $item_data;
 }
 
 function cmbwc_get_cart_meta_html( $data ) {
-	$children = array(
-		'addons'   => array(),
-		'services' => array(),
-	);
+	$covers         = ! empty( $data['covers'] ) ? absint( $data['covers'] ) : 0;
+	$included_names = ! empty( $data['included_names'] ) && is_array( $data['included_names'] ) ? $data['included_names'] : array();
+	$addons         = array();
+	$services       = array();
 
 	if ( ! empty( $data['group_id'] ) ) {
 		$children = cmbwc_get_cart_children_for_group( $data['group_id'] );
+		$addons   = ! empty( $children['addons'] ) ? $children['addons'] : array();
+		$services = ! empty( $children['services'] ) ? $children['services'] : array();
 	}
 
 	ob_start();
 	?>
 	<div class="cmbwc-cart-meta">
-		<?php if ( ! empty( $data['covers'] ) ) : ?>
+		<?php if ( $covers > 0 ) : ?>
 			<div class="cmbwc-cart-row">
 				<span class="cmbwc-cart-label">Kuverter:</span>
-				<span class="cmbwc-cart-value"><?php echo esc_html( absint( $data['covers'] ) ); ?></span>
+				<span class="cmbwc-cart-value"><?php echo esc_html( $covers ); ?></span>
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $data['included_names'] ) && is_array( $data['included_names'] ) ) : ?>
-			<div class="cmbwc-cart-group">
-				<div class="cmbwc-cart-group-title">Indhold</div>
-				<ul class="cmbwc-cart-list">
-					<?php foreach ( $data['included_names'] as $name ) : ?>
-						<li><?php echo esc_html( $name ); ?></li>
-					<?php endforeach; ?>
-				</ul>
+		<?php if ( ! empty( $included_names ) ) : ?>
+			<div class="cmbwc-cart-row">
+				<span class="cmbwc-cart-label">Indhold:</span>
+				<span class="cmbwc-cart-value">
+					<ul class="cmbwc-cart-list">
+						<?php foreach ( $included_names as $name ) : ?>
+							<li><?php echo esc_html( $name ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</span>
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $children['addons'] ) ) : ?>
-			<div class="cmbwc-cart-group">
-				<div class="cmbwc-cart-group-title">Valgte tilvalg</div>
-				<ul class="cmbwc-cart-list">
-					<?php foreach ( $children['addons'] as $addon ) : ?>
-						<li><?php echo esc_html( absint( $addon['qty'] ) . ' x ' . $addon['name'] ); ?></li>
-					<?php endforeach; ?>
-				</ul>
+		<?php if ( ! empty( $addons ) ) : ?>
+			<div class="cmbwc-cart-row">
+				<span class="cmbwc-cart-label">Valgte tilvalg:</span>
+				<span class="cmbwc-cart-value">
+					<ul class="cmbwc-cart-list">
+						<?php foreach ( $addons as $addon ) : ?>
+							<li><?php echo esc_html( absint( $addon['qty'] ) . ' x ' . $addon['name'] ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</span>
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $children['services'] ) ) : ?>
-			<div class="cmbwc-cart-group">
-				<div class="cmbwc-cart-group-title">Valgt service</div>
-				<ul class="cmbwc-cart-list">
-					<?php foreach ( $children['services'] as $service ) : ?>
-						<li>
-							<?php
-							echo esc_html(
-								$service['qty'] > 1
-									? absint( $service['qty'] ) . ' x ' . $service['name']
-									: $service['name']
-							);
-							?>
-						</li>
-					<?php endforeach; ?>
-				</ul>
+		<?php if ( ! empty( $services ) ) : ?>
+			<div class="cmbwc-cart-row">
+				<span class="cmbwc-cart-label">Valgt service:</span>
+				<span class="cmbwc-cart-value">
+					<ul class="cmbwc-cart-list">
+						<?php foreach ( $services as $service ) : ?>
+							<li><?php echo esc_html( $service['qty'] > 1 ? absint( $service['qty'] ) . ' x ' . $service['name'] : $service['name'] ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</span>
 			</div>
 		<?php endif; ?>
 	</div>
@@ -402,13 +470,16 @@ function cmbwc_get_cart_meta_html( $data ) {
 	return ob_get_clean();
 }
 
-function cmbwc_get_child_cart_meta_html( $child_data ) {
-	$parent_name = ! empty( $child_data['parent_name'] ) ? $child_data['parent_name'] : '';
-	$child_type  = ! empty( $child_data['display_type_label'] ) ? $child_data['display_type_label'] : cmbwc_get_child_type_label( isset( $child_data['child_type'] ) ? $child_data['child_type'] : '' );
+function cmbwc_get_child_cart_meta_html( $child ) {
+	$child_type = ! empty( $child['display_type_label'] )
+		? sanitize_text_field( $child['display_type_label'] )
+		: cmbwc_get_child_type_label( isset( $child['child_type'] ) ? $child['child_type'] : '' );
+
+	$parent_name = ! empty( $child['parent_name'] ) ? sanitize_text_field( $child['parent_name'] ) : '';
 
 	ob_start();
 	?>
-	<div class="cmbwc-cart-meta">
+	<div class="cmbwc-cart-meta cmbwc-cart-meta-child">
 		<?php if ( '' !== $child_type ) : ?>
 			<div class="cmbwc-cart-row">
 				<span class="cmbwc-cart-label">Type:</span>
@@ -518,7 +589,7 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 						'parent_name'        => $menu_name,
 						'child_type'         => 'addon',
 						'source_key'         => (string) $addon_product_id,
-						'follow_covers'      => isset( $addon['follow_covers'] ) && 'yes' === $addon['follow_covers'] ? 'yes' : 'no',
+						'follow_covers'      => ! empty( $addon['follow_covers'] ) && 'yes' === $addon['follow_covers'] ? 'yes' : 'no',
 						'display_type_label' => 'Tilvalg',
 					),
 					'unique_key' => md5( $group_id . '_addon_' . $addon_product_id . '_' . microtime() ),
