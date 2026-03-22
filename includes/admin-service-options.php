@@ -16,6 +16,42 @@ function cmbwc_get_default_service_price_note( $price_type, $is_deposit = 'no' )
 }
 
 /**
+ * Produkter til service-kobling.
+ */
+function cmbwc_get_product_options_for_service_select() {
+	$product_ids = get_posts(
+		array(
+			'post_type'      => 'product',
+			'post_status'    => array( 'publish', 'private' ),
+			'posts_per_page' => -1,
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+			'fields'         => 'ids',
+		)
+	);
+
+	$options = array();
+
+	foreach ( $product_ids as $product_id ) {
+		$product = wc_get_product( $product_id );
+
+		if ( ! $product ) {
+			continue;
+		}
+
+		$label = $product->get_name() . ' (#' . $product_id . ')';
+
+		if ( '' !== $product->get_price() ) {
+			$label .= ' — ' . wp_strip_all_tags( wc_price( $product->get_price() ) );
+		}
+
+		$options[ $product_id ] = $label;
+	}
+
+	return $options;
+}
+
+/**
  * Hent servicevalg.
  */
 function cmbwc_get_service_options() {
@@ -24,18 +60,20 @@ function cmbwc_get_service_options() {
 	if ( empty( $service_options ) || ! is_array( $service_options ) ) {
 		$service_options = array(
 			'tray_glass' => array(
-				'label'      => 'Træfad & glas skåle',
-				'price'      => 200,
-				'price_type' => 'fixed',
-				'is_deposit' => 'yes',
-				'price_note' => 'depositum',
+				'label'             => 'Træfad & glas skåle',
+				'price'             => 200,
+				'price_type'        => 'fixed',
+				'is_deposit'        => 'yes',
+				'price_note'        => 'depositum',
+				'linked_product_id' => 0,
 			),
 			'single_use' => array(
-				'label'      => 'Engangsfad & -skåle',
-				'price'      => 4,
-				'price_type' => 'per_cover',
-				'is_deposit' => 'no',
-				'price_note' => 'pr. kuvert',
+				'label'             => 'Engangsfad & -skåle',
+				'price'             => 4,
+				'price_type'        => 'per_cover',
+				'is_deposit'        => 'no',
+				'price_note'        => 'pr. kuvert',
+				'linked_product_id' => 0,
 			),
 		);
 
@@ -48,6 +86,12 @@ function cmbwc_get_service_options() {
 
 		if ( empty( $option['price_note'] ) ) {
 			$service_options[ $key ]['price_note'] = cmbwc_get_default_service_price_note( $price_type, $is_deposit );
+		}
+
+		if ( empty( $option['linked_product_id'] ) ) {
+			$service_options[ $key ]['linked_product_id'] = 0;
+		} else {
+			$service_options[ $key ]['linked_product_id'] = absint( $option['linked_product_id'] );
 		}
 	}
 
@@ -70,12 +114,13 @@ function cmbwc_get_service_option_by_key( $service_key ) {
 /**
  * Render én admin-række.
  */
-function cmbwc_render_service_option_row( $index, $key = '', $option = array() ) {
-	$label      = isset( $option['label'] ) ? $option['label'] : '';
-	$price      = isset( $option['price'] ) ? $option['price'] : '';
-	$price_type = isset( $option['price_type'] ) ? $option['price_type'] : 'fixed';
-	$is_deposit = isset( $option['is_deposit'] ) ? $option['is_deposit'] : 'no';
-	$price_note = isset( $option['price_note'] ) ? $option['price_note'] : cmbwc_get_default_service_price_note( $price_type, $is_deposit );
+function cmbwc_render_service_option_row( $index, $key = '', $option = array(), $product_options = array() ) {
+	$label             = isset( $option['label'] ) ? $option['label'] : '';
+	$price             = isset( $option['price'] ) ? $option['price'] : '';
+	$price_type        = isset( $option['price_type'] ) ? $option['price_type'] : 'fixed';
+	$is_deposit        = isset( $option['is_deposit'] ) ? $option['is_deposit'] : 'no';
+	$price_note        = isset( $option['price_note'] ) ? $option['price_note'] : cmbwc_get_default_service_price_note( $price_type, $is_deposit );
+	$linked_product_id = isset( $option['linked_product_id'] ) ? absint( $option['linked_product_id'] ) : 0;
 	?>
 	<tr class="cmbwc-service-row">
 		<td class="cmbwc-col-key">
@@ -96,6 +141,20 @@ function cmbwc_render_service_option_row( $index, $key = '', $option = array() )
 				value="<?php echo esc_attr( $label ); ?>"
 				placeholder="Navn"
 			>
+		</td>
+
+		<td class="cmbwc-col-product">
+			<select
+				class="cmbwc-admin-select cmbwc-admin-select-product"
+				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][linked_product_id]"
+			>
+				<option value="0">— Intet koblet produkt —</option>
+				<?php foreach ( $product_options as $product_id => $product_label ) : ?>
+					<option value="<?php echo esc_attr( $product_id ); ?>" <?php selected( $linked_product_id, $product_id ); ?>>
+						<?php echo esc_html( $product_label ); ?>
+					</option>
+				<?php endforeach; ?>
+			</select>
 		</td>
 
 		<td class="cmbwc-col-price">
@@ -168,12 +227,13 @@ function cmbwc_render_service_options_page() {
 					continue;
 				}
 
-				$key_raw    = isset( $row['key'] ) ? sanitize_title( $row['key'] ) : '';
-				$label      = isset( $row['label'] ) ? sanitize_text_field( $row['label'] ) : '';
-				$price      = isset( $row['price'] ) ? wc_format_decimal( $row['price'] ) : 0;
-				$price_type = isset( $row['price_type'] ) && 'per_cover' === $row['price_type'] ? 'per_cover' : 'fixed';
-				$is_deposit = isset( $row['is_deposit'] ) && 'yes' === $row['is_deposit'] ? 'yes' : 'no';
-				$price_note = isset( $row['price_note'] ) ? sanitize_text_field( $row['price_note'] ) : '';
+				$key_raw           = isset( $row['key'] ) ? sanitize_title( $row['key'] ) : '';
+				$label             = isset( $row['label'] ) ? sanitize_text_field( $row['label'] ) : '';
+				$price             = isset( $row['price'] ) ? wc_format_decimal( $row['price'] ) : 0;
+				$price_type        = isset( $row['price_type'] ) && 'per_cover' === $row['price_type'] ? 'per_cover' : 'fixed';
+				$is_deposit        = isset( $row['is_deposit'] ) && 'yes' === $row['is_deposit'] ? 'yes' : 'no';
+				$price_note        = isset( $row['price_note'] ) ? sanitize_text_field( $row['price_note'] ) : '';
+				$linked_product_id = isset( $row['linked_product_id'] ) ? absint( $row['linked_product_id'] ) : 0;
 
 				if ( '' === $label ) {
 					continue;
@@ -190,11 +250,12 @@ function cmbwc_render_service_options_page() {
 				}
 
 				$cleaned[ $key ] = array(
-					'label'      => $label,
-					'price'      => (float) $price,
-					'price_type' => $price_type,
-					'is_deposit' => $is_deposit,
-					'price_note' => $price_note,
+					'label'             => $label,
+					'price'             => (float) $price,
+					'price_type'        => $price_type,
+					'is_deposit'        => $is_deposit,
+					'price_note'        => $price_note,
+					'linked_product_id' => $linked_product_id,
 				);
 			}
 		}
@@ -204,16 +265,17 @@ function cmbwc_render_service_options_page() {
 		echo '<div class="notice notice-success is-dismissible"><p>Servicevalg gemt.</p></div>';
 	}
 
-	$options = cmbwc_get_service_options();
+	$options         = cmbwc_get_service_options();
+	$product_options = cmbwc_get_product_options_for_service_select();
 	?>
 	<div class="wrap cmbwc-admin-page cmbwc-admin-service-options-page">
 		<h1>Servicevalg</h1>
-		<p>Her vedligeholder du servicevalg, pris og teksten under prisen på frontend.</p>
+		<p>Her vedligeholder du servicevalg, pris, koblet WooCommerce-produkt og teksten under prisen på frontend.</p>
 
 		<style>
 			.cmbwc-admin-service-options-page .cmbwc-service-options-table {
 				width: 100%;
-				max-width: 1320px;
+				max-width: 1440px;
 				table-layout: fixed;
 				border-collapse: collapse;
 			}
@@ -232,31 +294,35 @@ function cmbwc_render_service_options_page() {
 			}
 
 			.cmbwc-admin-service-options-page .cmbwc-col-key {
-				width: 18%;
-			}
-
-			.cmbwc-admin-service-options-page .cmbwc-col-label {
-				width: 28%;
-			}
-
-			.cmbwc-admin-service-options-page .cmbwc-col-price {
-				width: 10%;
-			}
-
-			.cmbwc-admin-service-options-page .cmbwc-col-price-type {
 				width: 13%;
 			}
 
+			.cmbwc-admin-service-options-page .cmbwc-col-label {
+				width: 20%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-product {
+				width: 25%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-price {
+				width: 9%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-price-type {
+				width: 11%;
+			}
+
 			.cmbwc-admin-service-options-page .cmbwc-col-deposit {
-				width: 10%;
+				width: 8%;
 			}
 
 			.cmbwc-admin-service-options-page .cmbwc-col-note {
-				width: 16%;
+				width: 10%;
 			}
 
 			.cmbwc-admin-service-options-page .cmbwc-col-actions {
-				width: 5%;
+				width: 4%;
 				white-space: nowrap;
 			}
 
@@ -293,14 +359,6 @@ function cmbwc_render_service_options_page() {
 				.cmbwc-admin-service-options-page .cmbwc-service-options-table td {
 					min-width: 120px;
 				}
-
-				.cmbwc-admin-service-options-page .cmbwc-col-label {
-					min-width: 220px;
-				}
-
-				.cmbwc-admin-service-options-page .cmbwc-col-note {
-					min-width: 220px;
-				}
 			}
 		</style>
 
@@ -312,6 +370,7 @@ function cmbwc_render_service_options_page() {
 					<tr>
 						<th class="cmbwc-col-key">Nøgle</th>
 						<th class="cmbwc-col-label">Navn</th>
+						<th class="cmbwc-col-product">Koblet produkt</th>
 						<th class="cmbwc-col-price">Pris</th>
 						<th class="cmbwc-col-price-type">Prismodel</th>
 						<th class="cmbwc-col-deposit">Depositum</th>
@@ -322,7 +381,7 @@ function cmbwc_render_service_options_page() {
 				<tbody id="cmbwc-service-options-rows">
 					<?php $index = 0; ?>
 					<?php foreach ( $options as $key => $option ) : ?>
-						<?php cmbwc_render_service_option_row( $index, $key, $option ); ?>
+						<?php cmbwc_render_service_option_row( $index, $key, $option, $product_options ); ?>
 						<?php $index++; ?>
 					<?php endforeach; ?>
 				</tbody>
@@ -339,6 +398,9 @@ function cmbwc_render_service_options_page() {
 		document.addEventListener('DOMContentLoaded', function () {
 			const tbody = document.getElementById('cmbwc-service-options-rows');
 			const addBtn = document.getElementById('cmbwc-add-service-row');
+			const productOptionsHtml = <?php echo wp_json_encode( implode( '', array_map( static function ( $product_id, $product_label ) {
+				return '<option value="' . esc_attr( $product_id ) . '">' . esc_html( $product_label ) . '</option>';
+			}, array_keys( $product_options ), $product_options ) ) ); ?>;
 
 			if (!tbody || !addBtn) {
 				return;
@@ -355,6 +417,12 @@ function cmbwc_render_service_options_page() {
 					</td>
 					<td class="cmbwc-col-label">
 						<input type="text" class="cmbwc-admin-input cmbwc-admin-input-label" name="cmbwc_service_options[${nextIndex}][label]" value="" placeholder="Navn">
+					</td>
+					<td class="cmbwc-col-product">
+						<select class="cmbwc-admin-select cmbwc-admin-select-product" name="cmbwc_service_options[${nextIndex}][linked_product_id]">
+							<option value="0">— Intet koblet produkt —</option>
+							${productOptionsHtml}
+						</select>
 					</td>
 					<td class="cmbwc-col-price">
 						<input type="number" step="0.01" min="0" class="cmbwc-admin-input cmbwc-admin-input-price" name="cmbwc_service_options[${nextIndex}][price]" value="" placeholder="0">

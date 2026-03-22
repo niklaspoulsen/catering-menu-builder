@@ -162,7 +162,7 @@ jQuery(function ($) {
 
 		var $wooQty = $form.find('input.qty').first();
 		if ($wooQty.length) {
-			$wooQty.val(1).trigger('change');
+			$wooQty.val(covers).trigger('change');
 		}
 
 		$form.find('input[name="cmbwc_covers"]').val(covers);
