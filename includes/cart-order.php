@@ -89,6 +89,82 @@ function cmbwc_get_child_type_label( $child_type ) {
 	}
 }
 
+function cmbwc_get_cart_children_for_group( $group_id ) {
+	$result = array(
+		'addons'   => array(),
+		'services' => array(),
+	);
+
+	if ( empty( $group_id ) || empty( WC()->cart ) ) {
+		return $result;
+	}
+
+	foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+		if ( empty( $cart_item['cmbwc_child_item']['group_id'] ) ) {
+			continue;
+		}
+
+		if ( $group_id !== $cart_item['cmbwc_child_item']['group_id'] ) {
+			continue;
+		}
+
+		$child_type = ! empty( $cart_item['cmbwc_child_item']['child_type'] ) ? $cart_item['cmbwc_child_item']['child_type'] : 'addon';
+		$name       = ! empty( $cart_item['data'] ) && is_a( $cart_item['data'], 'WC_Product' ) ? $cart_item['data']->get_name() : '';
+		$qty        = isset( $cart_item['quantity'] ) ? absint( $cart_item['quantity'] ) : 1;
+
+		if ( 'service' === $child_type ) {
+			$result['services'][] = array(
+				'name' => $name,
+				'qty'  => $qty,
+			);
+		} else {
+			$result['addons'][] = array(
+				'name' => $name,
+				'qty'  => $qty,
+			);
+		}
+	}
+
+	return $result;
+}
+
+function cmbwc_get_order_children_for_group( $order, $group_id ) {
+	$result = array(
+		'addons'   => array(),
+		'services' => array(),
+	);
+
+	if ( ! $order || empty( $group_id ) ) {
+		return $result;
+	}
+
+	foreach ( $order->get_items() as $order_item_id => $order_item ) {
+		$item_group_id = $order_item->get_meta( '_cmbwc_group_id', true );
+		$child_type    = $order_item->get_meta( '_cmbwc_child_type', true );
+
+		if ( $item_group_id !== $group_id ) {
+			continue;
+		}
+
+		if ( ! in_array( $child_type, array( 'addon', 'service' ), true ) ) {
+			continue;
+		}
+
+		$row = array(
+			'name' => $order_item->get_name(),
+			'qty'  => absint( $order_item->get_quantity() ),
+		);
+
+		if ( 'service' === $child_type ) {
+			$result['services'][] = $row;
+		} else {
+			$result['addons'][] = $row;
+		}
+	}
+
+	return $result;
+}
+
 add_filter( 'woocommerce_add_to_cart_validation', 'cmbwc_validate_add_to_cart', 10, 3 );
 
 function cmbwc_validate_add_to_cart( $passed, $product_id, $quantity ) {
@@ -249,6 +325,15 @@ function cmbwc_hide_default_item_data( $item_data, $cart_item ) {
 }
 
 function cmbwc_get_cart_meta_html( $data ) {
+	$children = array(
+		'addons'   => array(),
+		'services' => array(),
+	);
+
+	if ( ! empty( $data['group_id'] ) ) {
+		$children = cmbwc_get_cart_children_for_group( $data['group_id'] );
+	}
+
 	ob_start();
 	?>
 	<div class="cmbwc-cart-meta">
@@ -270,21 +355,33 @@ function cmbwc_get_cart_meta_html( $data ) {
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $data['selected_addons'] ) && is_array( $data['selected_addons'] ) ) : ?>
+		<?php if ( ! empty( $children['addons'] ) ) : ?>
 			<div class="cmbwc-cart-group">
 				<div class="cmbwc-cart-group-title">Valgte tilvalg</div>
 				<ul class="cmbwc-cart-list">
-					<?php foreach ( $data['selected_addons'] as $addon ) : ?>
+					<?php foreach ( $children['addons'] as $addon ) : ?>
 						<li><?php echo esc_html( absint( $addon['qty'] ) . ' x ' . $addon['name'] ); ?></li>
 					<?php endforeach; ?>
 				</ul>
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) && ! empty( $data['service_data']['label'] ) ) : ?>
+		<?php if ( ! empty( $children['services'] ) ) : ?>
 			<div class="cmbwc-cart-group">
 				<div class="cmbwc-cart-group-title">Valgt service</div>
-				<div class="cmbwc-cart-service"><?php echo esc_html( $data['service_data']['label'] ); ?></div>
+				<ul class="cmbwc-cart-list">
+					<?php foreach ( $children['services'] as $service ) : ?>
+						<li>
+							<?php
+							echo esc_html(
+								$service['qty'] > 1
+									? absint( $service['qty'] ) . ' x ' . $service['name']
+									: $service['name']
+							);
+							?>
+						</li>
+					<?php endforeach; ?>
+				</ul>
 			</div>
 		<?php endif; ?>
 	</div>
@@ -516,23 +613,29 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 			$item->add_meta_data( 'Indhold', implode( "\n", $data['included_names'] ) );
 		}
 
-		if ( ! empty( $data['selected_addons'] ) && is_array( $data['selected_addons'] ) ) {
-			$addon_lines = array();
+		if ( ! empty( $data['group_id'] ) ) {
+			$children = cmbwc_get_cart_children_for_group( $data['group_id'] );
 
-			foreach ( $data['selected_addons'] as $addon ) {
-				$addon_lines[] = absint( $addon['qty'] ) . ' x ' . $addon['name'];
-			}
+			if ( ! empty( $children['addons'] ) ) {
+				$addon_lines = array();
 
-			if ( ! empty( $addon_lines ) ) {
+				foreach ( $children['addons'] as $addon ) {
+					$addon_lines[] = absint( $addon['qty'] ) . ' x ' . $addon['name'];
+				}
+
 				$item->add_meta_data( 'Valgte tilvalg', implode( "\n", $addon_lines ) );
 			}
-		}
 
-		if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) && ! empty( $data['service_data']['label'] ) ) {
-			$item->add_meta_data( 'Valgt service', sanitize_text_field( $data['service_data']['label'] ) );
-		}
+			if ( ! empty( $children['services'] ) ) {
+				$service_lines = array();
 
-		if ( ! empty( $data['group_id'] ) ) {
+				foreach ( $children['services'] as $service ) {
+					$service_lines[] = $service['qty'] > 1 ? absint( $service['qty'] ) . ' x ' . $service['name'] : $service['name'];
+				}
+
+				$item->add_meta_data( 'Valgt service', implode( "\n", $service_lines ) );
+			}
+
 			$item->add_meta_data( '_cmbwc_group_id', sanitize_text_field( $data['group_id'] ) );
 		}
 
@@ -569,7 +672,7 @@ add_filter( 'woocommerce_order_item_display_meta_value', 'cmbwc_format_order_ite
 function cmbwc_format_order_item_meta_value( $display_value, $meta, $item ) {
 	$key = isset( $meta->key ) ? $meta->key : '';
 
-	if ( in_array( $key, array( 'Indhold', 'Valgte tilvalg' ), true ) ) {
+	if ( in_array( $key, array( 'Indhold', 'Valgte tilvalg', 'Valgt service' ), true ) ) {
 		$value = isset( $meta->value ) ? (string) $meta->value : '';
 		$lines = array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', $value ) ) );
 
