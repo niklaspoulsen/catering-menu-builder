@@ -4,6 +4,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+function cmbwc_debug_log( $label, $value = null ) {
+	if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
+		return;
+	}
+
+	if ( null === $value ) {
+		error_log( 'CMBWC ' . $label );
+		return;
+	}
+
+	if ( is_array( $value ) || is_object( $value ) ) {
+		error_log( 'CMBWC ' . $label . '=' . wp_json_encode( $value ) );
+		return;
+	}
+
+	error_log( 'CMBWC ' . $label . '=' . (string) $value );
+}
+
 function cmbwc_get_included_names_for_product( $product_id ) {
 	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
 
@@ -29,11 +47,15 @@ function cmbwc_get_included_names_for_product( $product_id ) {
 
 function cmbwc_parse_selected_addons_from_request() {
 	if ( empty( $_POST['cmbwc_selected_addons'] ) ) {
+		cmbwc_debug_log( 'parse_selected_addons raw', 'EMPTY' );
 		return array();
 	}
 
 	$raw  = wp_unslash( $_POST['cmbwc_selected_addons'] );
 	$data = json_decode( $raw, true );
+
+	cmbwc_debug_log( 'parse_selected_addons raw', $raw );
+	cmbwc_debug_log( 'parse_selected_addons decoded', $data );
 
 	if ( ! is_array( $data ) ) {
 		return array();
@@ -67,6 +89,8 @@ function cmbwc_parse_selected_addons_from_request() {
 			'follow_covers' => $follow,
 		);
 	}
+
+	cmbwc_debug_log( 'parse_selected_addons parsed', $parsed );
 
 	return $parsed;
 }
@@ -125,6 +149,8 @@ function cmbwc_get_cart_children_for_group( $group_id ) {
 		}
 	}
 
+	cmbwc_debug_log( 'get_cart_children_for_group ' . $group_id, $result );
+
 	return $result;
 }
 
@@ -173,6 +199,16 @@ function cmbwc_sync_child_lines_for_group( $group_id, $parent_qty ) {
 		$target_qty = max( 1, absint( $target_qty ) );
 
 		if ( (int) $child_item['quantity'] !== $target_qty ) {
+			cmbwc_debug_log(
+				'sync_child_lines_for_group updating',
+				array(
+					'group_id'   => $group_id,
+					'child_key'  => $child_key,
+					'from'       => (int) $child_item['quantity'],
+					'to'         => $target_qty,
+					'child_type' => $child_type,
+				)
+			);
 			WC()->cart->set_quantity( $child_key, $target_qty, false );
 		}
 	}
@@ -188,6 +224,17 @@ function cmbwc_validate_add_to_cart( $passed, $product_id, $quantity ) {
 	$covers         = isset( $_POST['cmbwc_covers'] ) ? absint( wp_unslash( $_POST['cmbwc_covers'] ) ) : 0;
 	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
 	$cover_step     = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
+
+	cmbwc_debug_log(
+		'validate_add_to_cart',
+		array(
+			'product_id'      => $product_id,
+			'covers'          => $covers,
+			'minimum_covers'  => $minimum_covers,
+			'cover_step'      => $cover_step,
+			'passed_initial'  => $passed,
+		)
+	);
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -217,6 +264,11 @@ function cmbwc_validate_add_to_cart( $passed, $product_id, $quantity ) {
 add_filter( 'woocommerce_add_cart_item_data', 'cmbwc_add_cart_item_data', 10, 3 );
 
 function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id ) {
+	cmbwc_debug_log( 'add_cart_item_data START product_id', $product_id );
+	cmbwc_debug_log( 'POST cmbwc_covers', isset( $_POST['cmbwc_covers'] ) ? wp_unslash( $_POST['cmbwc_covers'] ) : 'MISSING' );
+	cmbwc_debug_log( 'POST cmbwc_selected_service', isset( $_POST['cmbwc_selected_service'] ) ? wp_unslash( $_POST['cmbwc_selected_service'] ) : 'MISSING' );
+	cmbwc_debug_log( 'POST cmbwc_selected_addons', isset( $_POST['cmbwc_selected_addons'] ) ? wp_unslash( $_POST['cmbwc_selected_addons'] ) : 'MISSING' );
+
 	if ( ! empty( $_POST['cmbwc_parent_group_id'] ) ) {
 		$cart_item_data['cmbwc_child_item'] = array(
 			'group_id'           => sanitize_text_field( wp_unslash( $_POST['cmbwc_parent_group_id'] ) ),
@@ -229,10 +281,14 @@ function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id )
 		);
 
 		$cart_item_data['unique_key'] = md5( wp_json_encode( $cart_item_data['cmbwc_child_item'] ) . microtime() );
+
+		cmbwc_debug_log( 'add_cart_item_data CHILD item', $cart_item_data['cmbwc_child_item'] );
+
 		return $cart_item_data;
 	}
 
 	if ( 'yes' !== get_post_meta( $product_id, '_cmbwc_is_menu', true ) ) {
+		cmbwc_debug_log( 'add_cart_item_data non-menu product', $product_id );
 		return $cart_item_data;
 	}
 
@@ -251,6 +307,8 @@ function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id )
 	if ( ! is_array( $allowed_addons_meta ) ) {
 		$allowed_addons_meta = array();
 	}
+
+	cmbwc_debug_log( 'allowed_addons_meta', $allowed_addons_meta );
 
 	$selected_addons = cmbwc_parse_selected_addons_from_request();
 	$filtered_addons = array();
@@ -302,6 +360,8 @@ function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id )
 
 	$cart_item_data['unique_key'] = md5( wp_json_encode( $cart_item_data['cmbwc_data'] ) . microtime() );
 
+	cmbwc_debug_log( 'cmbwc_data', $cart_item_data['cmbwc_data'] );
+
 	return $cart_item_data;
 }
 
@@ -326,6 +386,8 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 add_filter( 'woocommerce_get_item_data', 'cmbwc_render_item_data', 10, 2 );
 
 function cmbwc_render_item_data( $item_data, $cart_item ) {
+	cmbwc_debug_log( 'render_item_data cart_item', $cart_item );
+
 	if ( ! empty( $cart_item['cmbwc_data'] ) && is_array( $cart_item['cmbwc_data'] ) ) {
 		$data = $cart_item['cmbwc_data'];
 
@@ -549,11 +611,23 @@ function cmbwc_widget_cart_item_quantity( $html, $cart_item, $cart_item_key ) {
 add_action( 'woocommerce_add_to_cart', 'cmbwc_expand_menu_to_cart_lines', 20, 6 );
 
 function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
+	cmbwc_debug_log(
+		'expand_menu_to_cart_lines START',
+		array(
+			'cart_item_key'   => $cart_item_key,
+			'product_id'      => $product_id,
+			'quantity'        => $quantity,
+			'cart_item_data'  => $cart_item_data,
+		)
+	);
+
 	if ( empty( $cart_item_data['cmbwc_data'] ) || ! is_array( $cart_item_data['cmbwc_data'] ) ) {
+		cmbwc_debug_log( 'expand_menu_to_cart_lines no cmbwc_data', $product_id );
 		return;
 	}
 
 	if ( empty( WC()->cart ) ) {
+		cmbwc_debug_log( 'expand_menu_to_cart_lines no WC cart', $product_id );
 		return;
 	}
 
@@ -576,6 +650,16 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 			if ( ! $addon_product_id || $addon_qty < 1 ) {
 				continue;
 			}
+
+			cmbwc_debug_log(
+				'adding addon child',
+				array(
+					'group_id'          => $group_id,
+					'addon_product_id'  => $addon_product_id,
+					'addon_qty'         => $addon_qty,
+					'follow_covers'     => ! empty( $addon['follow_covers'] ) ? $addon['follow_covers'] : 'no',
+				)
+			);
 
 			WC()->cart->add_to_cart(
 				$addon_product_id,
@@ -605,6 +689,16 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 
 		if ( $linked_product_id ) {
 			$service_qty = 'per_cover' === $service_price_type ? $covers : 1;
+
+			cmbwc_debug_log(
+				'adding service child',
+				array(
+					'group_id'           => $group_id,
+					'linked_product_id'  => $linked_product_id,
+					'service_qty'        => $service_qty,
+					'service_price_type' => $service_price_type,
+				)
+			);
 
 			WC()->cart->add_to_cart(
 				$linked_product_id,

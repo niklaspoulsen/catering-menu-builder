@@ -189,6 +189,14 @@ jQuery(function ($) {
 		$box.find('.cmbwc-local-sync-covers').val(String(covers));
 		$box.find('.cmbwc-local-sync-service').val(serviceData.selected);
 		$box.find('.cmbwc-local-sync-addons').val(addonsJson);
+
+		console.log('CMBWC syncWooForm', {
+			covers: covers,
+			service: serviceData.selected,
+			addons: addonData.selected,
+			addonsJson: addonsJson,
+			formFound: !!$form.length
+		});
 	}
 
 	function updateBox($box) {
@@ -241,6 +249,13 @@ jQuery(function ($) {
 
 	$(document).on('submit', 'form.cart', function () {
 		updateAllBoxes();
+
+		var $form = $(this);
+		console.log('CMBWC form submit values', {
+			covers: $form.find('input[name="cmbwc_covers"]').val(),
+			service: $form.find('input[name="cmbwc_selected_service"]').val(),
+			addons: $form.find('input[name="cmbwc_selected_addons"]').val()
+		});
 	});
 
 	updateAllBoxes();

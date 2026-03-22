@@ -6,9 +6,41 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 add_shortcode( 'cmbwc_menu_info', 'cmbwc_shortcode_menu_info' );
 add_shortcode( 'cmbwc_menu_contents', 'cmbwc_shortcode_menu_contents' );
-add_shortcode( 'cmbwc_menu_options', 'cmbwc_shortcode_menu_options_placeholder' );
+add_shortcode( 'cmbwc_menu_options', 'cmbwc_shortcode_menu_options' );
 
-add_action( 'woocommerce_before_add_to_cart_button', 'cmbwc_render_menu_options_in_form', 15 );
+add_action( 'woocommerce_before_add_to_cart_button', 'cmbwc_render_form_sync_fields', 5 );
+
+function cmbwc_render_form_sync_fields() {
+	global $product;
+
+	if ( ! $product || ! is_a( $product, 'WC_Product' ) ) {
+		return;
+	}
+
+	$product_id = $product->get_id();
+
+	if ( 'yes' !== get_post_meta( $product_id, '_cmbwc_is_menu', true ) ) {
+		return;
+	}
+
+	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+
+	if ( $minimum_covers < 1 ) {
+		$minimum_covers = 1;
+	}
+
+	$service_keys = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
+	if ( ! is_array( $service_keys ) ) {
+		$service_keys = array();
+	}
+
+	$default_service = ! empty( $service_keys[0] ) ? (string) $service_keys[0] : '';
+	?>
+	<input type="hidden" name="cmbwc_covers" class="cmbwc-form-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
+	<input type="hidden" name="cmbwc_selected_service" class="cmbwc-form-sync-service" value="<?php echo esc_attr( $default_service ); ?>">
+	<input type="hidden" name="cmbwc_selected_addons" class="cmbwc-form-sync-addons" value="[]">
+	<?php
+}
 
 function cmbwc_get_current_product() {
 	global $product, $post;
@@ -22,6 +54,10 @@ function cmbwc_get_current_product() {
 	}
 
 	return null;
+}
+
+function cmbwc_is_menu_product( $product_id ) {
+	return 'yes' === get_post_meta( $product_id, '_cmbwc_is_menu', true );
 }
 
 function cmbwc_format_day_label( $days ) {
@@ -47,7 +83,9 @@ function cmbwc_get_product_image_url( $product_id, $size = 'thumbnail' ) {
 }
 
 function cmbwc_format_compact_price( $price ) {
-	return number_format_i18n( (float) $price, 0 ) . ',-';
+	$price = (float) $price;
+
+	return number_format_i18n( $price, 0 ) . ',-';
 }
 
 function cmbwc_get_service_price_suffix( $service_data ) {
@@ -76,8 +114,13 @@ function cmbwc_get_product_allowed_weekdays( $product_id ) {
 		return array();
 	}
 
-	$values = is_array( $raw ) ? $raw : array_map( 'trim', explode( ',', (string) $raw ) );
-	$clean  = array();
+	if ( is_array( $raw ) ) {
+		$values = $raw;
+	} else {
+		$values = array_map( 'trim', explode( ',', (string) $raw ) );
+	}
+
+	$clean = array();
 
 	foreach ( $values as $day ) {
 		$day = (string) $day;
@@ -124,7 +167,11 @@ function cmbwc_get_product_ordering_text( $product_id ) {
 		}
 	}
 
-	return empty( $selected ) ? 'Alle dage' : implode( ', ', $selected );
+	if ( empty( $selected ) ) {
+		return 'Alle dage';
+	}
+
+	return implode( ', ', $selected );
 }
 
 function cmbwc_shortcode_menu_info() {
@@ -135,20 +182,36 @@ function cmbwc_shortcode_menu_info() {
 	}
 
 	$product_id     = $product->get_id();
-	$minimum_covers = max( 1, (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true ) );
+	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
 	$lead_time      = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
 	$ordering_text  = cmbwc_get_product_ordering_text( $product_id );
 
+	if ( $minimum_covers < 1 ) {
+		$minimum_covers = 1;
+	}
+
 	ob_start();
 	?>
-	<div class="cmbwc-box cmbwc-menu-info">
-		<h3>Menuinfo</h3>
-		<div class="cmbwc-info-list">
-			<div><span>Minimum kuverter</span> <span><?php echo esc_html( $minimum_covers ); ?></span></div>
+	<div class="cmbwc-box cmbwc-menu-info cmbwc-block cmbwc-block-menu-info">
+		<h3 class="cmbwc-title cmbwc-block-title">Menuinfo</h3>
+
+		<div class="cmbwc-info-list cmbwc-list cmbwc-list-info">
+			<div class="cmbwc-info-item cmbwc-info-row cmbwc-row">
+				<span class="cmbwc-info-label cmbwc-label">Minimum kuverter</span>
+				<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( $minimum_covers ); ?></span>
+			</div>
+
 			<?php if ( $lead_time > 0 ) : ?>
-				<div><span>Bestilles senest</span> <span><?php echo esc_html( cmbwc_format_day_label( $lead_time ) ); ?></span></div>
+				<div class="cmbwc-info-item cmbwc-info-row cmbwc-row">
+					<span class="cmbwc-info-label cmbwc-label">Bestilles senest</span>
+					<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( cmbwc_format_day_label( $lead_time ) ); ?></span>
+				</div>
 			<?php endif; ?>
-			<div><span>Kan bestilles</span> <span><?php echo esc_html( $ordering_text ); ?></span></div>
+
+			<div class="cmbwc-info-item cmbwc-info-row cmbwc-row">
+				<span class="cmbwc-info-label cmbwc-label">Kan bestilles</span>
+				<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( $ordering_text ); ?></span>
+			</div>
 		</div>
 	</div>
 	<?php
@@ -169,56 +232,90 @@ function cmbwc_shortcode_menu_contents() {
 		return '';
 	}
 
+	$grouped = array();
+
+	foreach ( $included_products as $included_product_id ) {
+		$included_product_id = absint( $included_product_id );
+		$included_product    = wc_get_product( $included_product_id );
+
+		if ( ! $included_product || 'publish' !== get_post_status( $included_product_id ) ) {
+			continue;
+		}
+
+		$terms         = get_the_terms( $included_product_id, 'product_cat' );
+		$category_name = 'Retter';
+
+		if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+			$category_name = $terms[0]->name;
+		}
+
+		if ( ! isset( $grouped[ $category_name ] ) ) {
+			$grouped[ $category_name ] = array();
+		}
+
+		$grouped[ $category_name ][] = array(
+			'id'    => $included_product_id,
+			'name'  => $included_product->get_name(),
+			'image' => cmbwc_get_product_image_url( $included_product_id ),
+		);
+	}
+
+	if ( empty( $grouped ) ) {
+		return '';
+	}
+
 	ob_start();
 	?>
-	<div class="cmbwc-box cmbwc-menu-contents">
-		<h3>Indhold i menuen</h3>
-		<div class="cmbwc-card-list">
-			<?php foreach ( $included_products as $included_product_id ) : ?>
-				<?php
-				$included_product_id = absint( $included_product_id );
-				$included_product    = wc_get_product( $included_product_id );
+	<div class="cmbwc-box cmbwc-menu-contents cmbwc-block cmbwc-block-menu-contents">
+		<h3 class="cmbwc-title cmbwc-block-title">Indhold i menuen</h3>
 
-				if ( ! $included_product || 'publish' !== get_post_status( $included_product_id ) ) {
-					continue;
-				}
-				?>
-				<div class="cmbwc-card">
-					<?php $img = cmbwc_get_product_image_url( $included_product_id ); ?>
-					<?php if ( $img ) : ?>
-						<img src="<?php echo esc_url( $img ); ?>" alt="<?php echo esc_attr( $included_product->get_name() ); ?>">
-					<?php endif; ?>
-					<div><?php echo esc_html( $included_product->get_name() ); ?></div>
+		<?php foreach ( $grouped as $category_name => $items ) : ?>
+			<div class="cmbwc-content-group cmbwc-group cmbwc-content-category">
+				<h4 class="cmbwc-subtitle cmbwc-group-title"><?php echo esc_html( $category_name ); ?></h4>
+
+				<div class="cmbwc-card-list cmbwc-list cmbwc-list-cards">
+					<?php foreach ( $items as $item ) : ?>
+						<div class="cmbwc-card cmbwc-ui-card cmbwc-content-card">
+							<?php if ( ! empty( $item['image'] ) ) : ?>
+								<div class="cmbwc-card-image-wrap cmbwc-media-wrap">
+									<img class="cmbwc-card-image cmbwc-media" src="<?php echo esc_url( $item['image'] ); ?>" alt="<?php echo esc_attr( $item['name'] ); ?>">
+								</div>
+							<?php endif; ?>
+
+							<div class="cmbwc-card-content cmbwc-content">
+								<div class="cmbwc-card-title cmbwc-ui-title"><?php echo esc_html( $item['name'] ); ?></div>
+							</div>
+						</div>
+					<?php endforeach; ?>
 				</div>
-			<?php endforeach; ?>
-		</div>
+			</div>
+		<?php endforeach; ?>
 	</div>
 	<?php
 	return ob_get_clean();
 }
 
-function cmbwc_shortcode_menu_options_placeholder() {
-	return '';
-}
+function cmbwc_shortcode_menu_options() {
+	$product = cmbwc_get_current_product();
 
-function cmbwc_render_menu_options_in_form() {
-	global $product;
-
-	if ( ! $product || ! is_a( $product, 'WC_Product' ) ) {
-		return;
+	if ( ! $product ) {
+		return '';
 	}
 
-	$product_id = $product->get_id();
-
-	if ( 'yes' !== get_post_meta( $product_id, '_cmbwc_is_menu', true ) ) {
-		return;
-	}
-
-	$minimum_covers = max( 1, (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true ) );
-	$cover_step     = max( 1, (int) get_post_meta( $product_id, '_cmbwc_cover_step', true ) );
+	$product_id     = $product->get_id();
+	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+	$cover_step     = (int) get_post_meta( $product_id, '_cmbwc_cover_step', true );
 	$menu_addons    = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
 	$service_keys   = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
 	$service_all    = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
+
+	if ( $minimum_covers < 1 ) {
+		$minimum_covers = 1;
+	}
+
+	if ( $cover_step < 1 ) {
+		$cover_step = 1;
+	}
 
 	if ( ! is_array( $menu_addons ) ) {
 		$menu_addons = array();
@@ -276,27 +373,82 @@ function cmbwc_render_menu_options_in_form() {
 	}
 
 	$default_service = ! empty( $services_for_output[0]['key'] ) ? $services_for_output[0]['key'] : '';
-	?>
-	<div class="cmbwc-box cmbwc-menu-options" data-product-id="<?php echo esc_attr( $product_id ); ?>" data-price-per-cover="<?php echo esc_attr( $price_per_cover ); ?>" data-minimum-covers="<?php echo esc_attr( $minimum_covers ); ?>" data-cover-step="<?php echo esc_attr( $cover_step ); ?>">
-		<h3>Menuvalg</h3>
 
-		<div class="cmbwc-form-row">
-			<label for="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>"><strong>Antal kuverter</strong></label>
-			<input type="number" id="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>" class="cmbwc-covers" min="<?php echo esc_attr( $minimum_covers ); ?>" step="<?php echo esc_attr( $cover_step ); ?>" value="<?php echo esc_attr( $minimum_covers ); ?>">
+	ob_start();
+	?>
+	<div
+		class="cmbwc-box cmbwc-menu-options cmbwc-block cmbwc-block-menu-options"
+		data-product-id="<?php echo esc_attr( $product_id ); ?>"
+		data-price-per-cover="<?php echo esc_attr( $price_per_cover ); ?>"
+		data-minimum-covers="<?php echo esc_attr( $minimum_covers ); ?>"
+		data-cover-step="<?php echo esc_attr( $cover_step ); ?>"
+	>
+		<h3 class="cmbwc-title cmbwc-block-title">Menuvalg</h3>
+
+		<div class="cmbwc-field cmbwc-form-row cmbwc-form-row-covers">
+			<label for="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>" class="cmbwc-label cmbwc-field-label"><strong>Antal kuverter</strong></label>
+			<input
+				type="number"
+				id="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>"
+				class="cmbwc-covers cmbwc-input cmbwc-input-covers"
+				min="<?php echo esc_attr( $minimum_covers ); ?>"
+				step="<?php echo esc_attr( $cover_step ); ?>"
+				value="<?php echo esc_attr( $minimum_covers ); ?>"
+			>
 		</div>
 
 		<?php if ( ! empty( $addons_for_output ) ) : ?>
-			<div class="cmbwc-section cmbwc-group-addons">
-				<h4>Tilvalg</h4>
-				<div class="cmbwc-addon-list">
+			<div class="cmbwc-section cmbwc-group cmbwc-group-addons">
+				<h4 class="cmbwc-subtitle cmbwc-group-title">Tilvalg</h4>
+
+				<div class="cmbwc-addon-list cmbwc-list cmbwc-list-addons">
 					<?php foreach ( $addons_for_output as $addon ) : ?>
-						<div class="cmbwc-addon-item cmbwc-choice-addon" data-addon-id="<?php echo esc_attr( $addon['id'] ); ?>" data-addon-price="<?php echo esc_attr( $addon['price'] ); ?>" data-follow-covers="<?php echo esc_attr( $addon['follow_covers'] ); ?>">
-							<label class="cmbwc-addon-label">
-								<input type="checkbox" class="cmbwc-addon-checkbox" value="<?php echo esc_attr( $addon['id'] ); ?>">
-								<span class="cmbwc-addon-name"><?php echo esc_html( $addon['name'] ); ?></span>
-								<span class="cmbwc-addon-price"><?php echo esc_html( $addon['price_compact'] . ' ' . $addon['price_suffix'] ); ?></span>
+						<div
+							class="cmbwc-addon-item cmbwc-ui-card cmbwc-choice-card cmbwc-choice-addon"
+							data-addon-id="<?php echo esc_attr( $addon['id'] ); ?>"
+							data-addon-price="<?php echo esc_attr( $addon['price'] ); ?>"
+							data-follow-covers="<?php echo esc_attr( $addon['follow_covers'] ); ?>"
+						>
+							<label class="cmbwc-addon-label cmbwc-choice-label">
+								<span class="cmbwc-addon-left cmbwc-choice-left">
+									<input
+										type="checkbox"
+										class="cmbwc-addon-checkbox cmbwc-choice-input cmbwc-visually-hidden-input"
+										value="<?php echo esc_attr( $addon['id'] ); ?>"
+									>
+
+									<span class="cmbwc-choice-control cmbwc-choice-control-checkbox" aria-hidden="true"></span>
+
+									<?php if ( ! empty( $addon['image'] ) ) : ?>
+										<img class="cmbwc-addon-image cmbwc-choice-image" src="<?php echo esc_url( $addon['image'] ); ?>" alt="<?php echo esc_attr( $addon['name'] ); ?>">
+									<?php endif; ?>
+
+									<span class="cmbwc-addon-name-wrap cmbwc-choice-content">
+										<span class="cmbwc-addon-name cmbwc-ui-title"><?php echo esc_html( $addon['name'] ); ?></span>
+									</span>
+								</span>
+
 								<?php if ( 'no' === $addon['follow_covers'] ) : ?>
-									<input type="number" class="cmbwc-addon-qty" min="1" step="1" value="1" disabled>
+									<span class="cmbwc-addon-right-wrap cmbwc-choice-right cmbwc-choice-right-qty">
+										<span class="cmbwc-addon-right-price cmbwc-choice-right-price" aria-hidden="true">
+											<span class="cmbwc-addon-follow-price-value cmbwc-price-big"><?php echo esc_html( $addon['price_compact'] ); ?></span>
+											<span class="cmbwc-addon-follow-price-note cmbwc-price-small"><?php echo esc_html( $addon['price_suffix'] ); ?></span>
+										</span>
+
+										<input
+											type="number"
+											class="cmbwc-addon-qty cmbwc-input cmbwc-input-addon-qty"
+											min="1"
+											step="1"
+											value="1"
+											disabled
+										>
+									</span>
+								<?php else : ?>
+									<span class="cmbwc-addon-follow-price cmbwc-choice-right cmbwc-choice-right-price" aria-hidden="true">
+										<span class="cmbwc-addon-follow-price-value cmbwc-price-big"><?php echo esc_html( $addon['price_compact'] ); ?></span>
+										<span class="cmbwc-addon-follow-price-note cmbwc-price-small"><?php echo esc_html( $addon['price_suffix'] ); ?></span>
+									</span>
 								<?php endif; ?>
 							</label>
 						</div>
@@ -306,32 +458,82 @@ function cmbwc_render_menu_options_in_form() {
 		<?php endif; ?>
 
 		<?php if ( ! empty( $services_for_output ) ) : ?>
-			<div class="cmbwc-section cmbwc-group-services">
-				<h4>Type af fad / anretning</h4>
-				<div class="cmbwc-service-list">
+			<div class="cmbwc-section cmbwc-group cmbwc-group-services">
+				<h4 class="cmbwc-subtitle cmbwc-group-title">Type af fad / anretning</h4>
+
+				<div class="cmbwc-service-list cmbwc-list cmbwc-list-services">
 					<?php foreach ( $services_for_output as $index => $service ) : ?>
-						<label class="cmbwc-service-item" data-service-price="<?php echo esc_attr( $service['price'] ); ?>" data-service-price-type="<?php echo esc_attr( $service['price_type'] ); ?>">
-							<input type="radio" name="cmbwc_service_choice_<?php echo esc_attr( $product_id ); ?>" class="cmbwc-service-radio" value="<?php echo esc_attr( $service['key'] ); ?>" <?php checked( 0 === $index ); ?>>
-							<span class="cmbwc-service-name"><?php echo esc_html( $service['label'] ); ?></span>
-							<span class="cmbwc-service-price"><?php echo esc_html( $service['price_compact'] . ' ' . $service['price_suffix'] ); ?></span>
+						<label
+							class="cmbwc-service-item cmbwc-ui-card cmbwc-choice-card cmbwc-choice-service"
+							data-service-price="<?php echo esc_attr( $service['price'] ); ?>"
+							data-service-price-type="<?php echo esc_attr( $service['price_type'] ); ?>"
+						>
+							<span class="cmbwc-service-left cmbwc-choice-left">
+								<input
+									type="radio"
+									name="cmbwc_service_choice_<?php echo esc_attr( $product_id ); ?>"
+									class="cmbwc-service-radio cmbwc-choice-input cmbwc-visually-hidden-input"
+									value="<?php echo esc_attr( $service['key'] ); ?>"
+									<?php checked( 0 === $index ); ?>
+								>
+
+								<span class="cmbwc-choice-control cmbwc-choice-control-radio" aria-hidden="true"></span>
+
+								<span class="cmbwc-service-content cmbwc-choice-content">
+									<span class="cmbwc-service-name cmbwc-ui-title"><?php echo esc_html( $service['label'] ); ?></span>
+								</span>
+							</span>
+
+							<span class="cmbwc-service-price-wrap cmbwc-choice-right cmbwc-choice-right-price" aria-hidden="true">
+								<span class="cmbwc-service-price-value cmbwc-price-big"><?php echo esc_html( $service['price_compact'] ); ?></span>
+								<span class="cmbwc-service-price-note cmbwc-price-small"><?php echo esc_html( $service['price_suffix'] ); ?></span>
+							</span>
 						</label>
 					<?php endforeach; ?>
 				</div>
 			</div>
 		<?php endif; ?>
 
-		<div class="cmbwc-pricing-box">
-			<div><span>Pris pr. kuvert</span> <strong class="cmbwc-price-per-cover"><?php echo wp_kses_post( wc_price( $price_per_cover ) ); ?></strong></div>
-			<div><span>Antal kuverter</span> <strong class="cmbwc-cover-count"><?php echo esc_html( $minimum_covers ); ?></strong></div>
-			<div><span>Menupris</span> <strong class="cmbwc-menu-total"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong></div>
-			<div><span>Tilvalg</span> <strong class="cmbwc-addon-total"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong></div>
-			<div><span>Service</span> <strong class="cmbwc-service-total"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong></div>
-			<div><span>Samlet pris</span> <strong class="cmbwc-total-price"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong></div>
+		<div class="cmbwc-section cmbwc-group cmbwc-group-pricing">
+			<h4 class="cmbwc-subtitle cmbwc-group-title">Prisoversigt</h4>
+
+			<div class="cmbwc-price-box cmbwc-pricing-box">
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Pris pr. kuvert</span>
+					<strong class="cmbwc-price-per-cover cmbwc-value"><?php echo wp_kses_post( wc_price( $price_per_cover ) ); ?></strong>
+				</div>
+
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Antal kuverter</span>
+					<strong class="cmbwc-cover-count cmbwc-value"><?php echo esc_html( $minimum_covers ); ?></strong>
+				</div>
+
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Menupris</span>
+					<strong class="cmbwc-menu-total cmbwc-value"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong>
+				</div>
+
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Tilvalg</span>
+					<strong class="cmbwc-addon-total cmbwc-value"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong>
+				</div>
+
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Service</span>
+					<strong class="cmbwc-service-total cmbwc-value"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong>
+				</div>
+
+				<div class="cmbwc-price-row cmbwc-price-row-total cmbwc-row cmbwc-row-total">
+					<span class="cmbwc-label">Samlet pris</span>
+					<strong class="cmbwc-total-price cmbwc-value"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong>
+				</div>
+			</div>
 		</div>
 
-		<input type="hidden" name="cmbwc_covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
-		<input type="hidden" name="cmbwc_selected_service" value="<?php echo esc_attr( $default_service ); ?>">
-		<input type="hidden" name="cmbwc_selected_addons" value="[]">
+		<input type="hidden" class="cmbwc-local-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
+		<input type="hidden" class="cmbwc-local-sync-service" value="<?php echo esc_attr( $default_service ); ?>">
+		<input type="hidden" class="cmbwc-local-sync-addons" value="[]">
 	</div>
 	<?php
+	return ob_get_clean();
 }
