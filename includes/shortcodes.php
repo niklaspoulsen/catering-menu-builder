@@ -83,6 +83,17 @@ function cmbwc_shortcode_menu_info() {
 	$product_id     = $product->get_id();
 	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
 	$lead_time      = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
+	$ordering_text  = '';
+
+	if ( class_exists( 'WCR_Product_Rules' ) && method_exists( 'WCR_Product_Rules', 'get_frontend_ordering_text' ) ) {
+		$ordering_text = WCR_Product_Rules::get_frontend_ordering_text( $product_id );
+	}
+
+	if ( empty( $ordering_text ) ) {
+		$ordering_text = 'Kan bestilles: Alle dage';
+	}
+
+	$ordering_text = preg_replace( '/^Kan bestilles:\s*/i', '', $ordering_text );
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -105,6 +116,11 @@ function cmbwc_shortcode_menu_info() {
 					<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( cmbwc_format_day_label( $lead_time ) ); ?></span>
 				</div>
 			<?php endif; ?>
+
+			<div class="cmbwc-info-item cmbwc-info-row cmbwc-row">
+				<span class="cmbwc-info-label cmbwc-label">Kan bestilles</span>
+				<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( $ordering_text ); ?></span>
+			</div>
 		</div>
 	</div>
 	<?php

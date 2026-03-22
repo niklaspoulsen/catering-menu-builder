@@ -28,6 +28,15 @@ function cmbwc_register_admin_menu() {
 
 	add_submenu_page(
 		'cmbwc-catering',
+		'Gebyrer',
+		'Gebyrer',
+		'manage_woocommerce',
+		'cmbwc-surcharges',
+		'cmbwc_render_surcharges_page'
+	);
+
+	add_submenu_page(
+		'cmbwc-catering',
 		'Produktionsoverblik',
 		'Produktionsoverblik',
 		'manage_woocommerce',
@@ -53,6 +62,7 @@ function cmbwc_render_admin_welcome_page() {
 
 		<ul style="list-style:disc; padding-left:18px;">
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-service-options' ) ); ?>">Servicevalg</a></li>
+			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-surcharges' ) ); ?>">Gebyrer</a></li>
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-production-overview' ) ); ?>">Produktionsoverblik</a></li>
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-print-settings' ) ); ?>">Print / Bonner</a></li>
 		</ul>
