@@ -4,7 +4,10 @@ jQuery(function ($) {
 		if (isNaN(value)) {
 			value = 0;
 		}
-		return value.toFixed(2).replace('.', ',') + ' kr.';
+		return value.toLocaleString('da-DK', {
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2
+		}) + ' kr.';
 	}
 
 	function getNumber(value, fallback) {
@@ -38,7 +41,6 @@ jQuery(function ($) {
 		if (step > 1) {
 			var diff = covers - min;
 			var remainder = diff % step;
-
 			if (remainder !== 0) {
 				covers = covers - remainder;
 				if (covers < min) {

@@ -326,10 +326,11 @@ function cmbwc_shortcode_menu_options() {
 		$service_data = $service_all[ $service_key ];
 		$price_type   = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
 		$price        = isset( $service_data['price'] ) ? (float) $service_data['price'] : 0;
+		$label        = isset( $service_data['title'] ) ? $service_data['title'] : ( isset( $service_data['label'] ) ? $service_data['label'] : $service_key );
 
 		$services_for_output[] = array(
 			'key'           => $service_key,
-			'label'         => isset( $service_data['label'] ) ? $service_data['label'] : $service_key,
+			'label'         => $label,
 			'price'         => $price,
 			'price_type'    => $price_type,
 			'price_compact' => cmbwc_format_compact_price( $price ),
@@ -494,12 +495,12 @@ function cmbwc_shortcode_menu_options() {
 		</div>
 
 		<input type="hidden" name="cmbwc_covers" class="cmbwc-woo-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
-		<input type="hidden" name="cmbwc_selected_service" class="cmbwc-woo-sync-service" value="">
+		<input type="hidden" name="cmbwc_selected_service" class="cmbwc-woo-sync-service" value="<?php echo ! empty( $services_for_output[0]['key'] ) ? esc_attr( $services_for_output[0]['key'] ) : ''; ?>">
 		<input type="hidden" name="cmbwc_selected_addons" class="cmbwc-woo-sync-addons" value="[]">
 
 		<input type="hidden" class="cmbwc-local-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
-		<input type="hidden" class="cmbwc-local-sync-service" value="">
-		<input type="hidden" class="cmbwc-local-sync-addons" value="">
+		<input type="hidden" class="cmbwc-local-sync-service" value="<?php echo ! empty( $services_for_output[0]['key'] ) ? esc_attr( $services_for_output[0]['key'] ) : ''; ?>">
+		<input type="hidden" class="cmbwc-local-sync-addons" value="[]">
 	</div>
 	<?php
 	return ob_get_clean();
