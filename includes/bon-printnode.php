@@ -238,7 +238,110 @@ function cmbwc_can_use_printnode() {
 }
 
 /**
- * Find den rigtige PrintNode action key direkte fra WooCommerce order actions.
+ * Finder printer-ID for "Simple order summary" fra PrintNode plugin settings.
+ *
+ * Vi prøver flere mulige option-strukturer, fordi Simba plugin har ændret
+ * struktur mellem versioner.
+ */
+function cmbwc_get_printnode_target_printer_id() {
+	$candidate_options = array(
+		'woocommerce_printnode_options',
+		'woocommerce_simba_printorders_printnode_options',
+		'printnode_options',
+	);
+
+	foreach ( $candidate_options as $option_key ) {
+		$settings = get_option( $option_key, array() );
+
+		if ( ! is_array( $settings ) || empty( $settings ) ) {
+			continue;
+		}
+
+		$paths = array(
+			'print_on_payment_complete',
+			'print_on_order',
+			'documents',
+			'document_printing',
+			'print_jobs',
+			'jobs',
+		);
+
+		foreach ( $paths as $path_key ) {
+			if ( empty( $settings[ $path_key ] ) || ! is_array( $settings[ $path_key ] ) ) {
+				continue;
+			}
+
+			foreach ( $settings[ $path_key ] as $rule ) {
+				if ( ! is_array( $rule ) ) {
+					continue;
+				}
+
+				$document = '';
+
+				if ( isset( $rule['document'] ) ) {
+					$document = (string) $rule['document'];
+				} elseif ( isset( $rule['template'] ) ) {
+					$document = (string) $rule['template'];
+				} elseif ( isset( $rule['type'] ) ) {
+					$document = (string) $rule['type'];
+				}
+
+				$is_internal = ( 'internal' === $document || 'simple-summary' === $document || 'simple_summary' === $document );
+
+				if ( ! $is_internal ) {
+					continue;
+				}
+
+				if ( ! empty( $rule['printer'] ) ) {
+					return absint( $rule['printer'] );
+				}
+
+				if ( ! empty( $rule['printer_id'] ) ) {
+					return absint( $rule['printer_id'] );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Fallback:
+	 * Nogle versioner gemmer dokument->printer mapping i POST-lignende arrays.
+	 */
+	$raw_candidates = array(
+		get_option( 'woocommerce_printnode_options', array() ),
+		get_option( 'woocommerce_simba_printorders_printnode_options', array() ),
+	);
+
+	foreach ( $raw_candidates as $settings ) {
+		if ( ! is_array( $settings ) || empty( $settings ) ) {
+			continue;
+		}
+
+		foreach ( $settings as $key => $value ) {
+			if ( ! is_array( $value ) ) {
+				continue;
+			}
+
+			$key_string = (string) $key;
+			if ( false === strpos( $key_string, 'internal' ) && false === strpos( $key_string, 'simple' ) ) {
+				continue;
+			}
+
+			if ( ! empty( $value['printer'] ) ) {
+				return absint( $value['printer'] );
+			}
+
+			if ( ! empty( $value['printer_id'] ) ) {
+				return absint( $value['printer_id'] );
+			}
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * Finder den præcise PrintNode action key ud fra target printer.
  */
 function cmbwc_get_printnode_internal_action_key() {
 	$actions = apply_filters( 'woocommerce_order_actions', array() );
@@ -247,14 +350,24 @@ function cmbwc_get_printnode_internal_action_key() {
 		return '';
 	}
 
-	// Først: prøv at finde "internal" (Simple summary).
+	$target_printer_id = cmbwc_get_printnode_target_printer_id();
+
+	if ( $target_printer_id > 0 ) {
+		$wanted = 'print-orders-printnode-' . $target_printer_id . '___internal';
+
+		if ( isset( $actions[ $wanted ] ) ) {
+			return $wanted;
+		}
+	}
+
+	// Fallback: første internal action.
 	foreach ( $actions as $key => $label ) {
 		if ( 0 === strpos( $key, 'print-orders-printnode-' ) && false !== strpos( $key, '___internal' ) ) {
 			return $key;
 		}
 	}
 
-	// Fallback: første PrintNode action overhovedet.
+	// Sidste fallback: første PrintNode action overhovedet.
 	foreach ( $actions as $key => $label ) {
 		if ( 0 === strpos( $key, 'print-orders-printnode-' ) ) {
 			return $key;
@@ -533,7 +646,8 @@ function cmbwc_force_order_list_preview_blank_target() {
 }
 
 /**
- * Send ordre til PrintNode ved at kalde den præcise order-action, pluginet selv har registreret.
+ * Send ordre til PrintNode ved at kalde den præcise order-action,
+ * som matcher Simple order summary og den valgte printer.
  */
 function cmbwc_send_order_to_printnode( $order_id ) {
 	$order_id = absint( $order_id );
@@ -554,7 +668,7 @@ function cmbwc_send_order_to_printnode( $order_id ) {
 
 	global $woocommerce_simba_printorders_printnode;
 
-	// Sørg for at pluginet har registreret sine order-actions.
+	// Sørg for at pluginet har registreret sine actions.
 	if ( method_exists( $woocommerce_simba_printorders_printnode, 'register_woocommerce_order_actions' ) ) {
 		$woocommerce_simba_printorders_printnode->register_woocommerce_order_actions();
 	}
