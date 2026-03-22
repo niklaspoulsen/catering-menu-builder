@@ -128,43 +128,6 @@ function cmbwc_get_cart_children_for_group( $group_id ) {
 	return $result;
 }
 
-function cmbwc_get_order_children_for_group( $order, $group_id ) {
-	$result = array(
-		'addons'   => array(),
-		'services' => array(),
-	);
-
-	if ( ! $order || empty( $group_id ) ) {
-		return $result;
-	}
-
-	foreach ( $order->get_items() as $order_item_id => $order_item ) {
-		$item_group_id = $order_item->get_meta( '_cmbwc_group_id', true );
-		$child_type    = $order_item->get_meta( '_cmbwc_child_type', true );
-
-		if ( $item_group_id !== $group_id ) {
-			continue;
-		}
-
-		if ( ! in_array( $child_type, array( 'addon', 'service' ), true ) ) {
-			continue;
-		}
-
-		$row = array(
-			'name' => $order_item->get_name(),
-			'qty'  => absint( $order_item->get_quantity() ),
-		);
-
-		if ( 'service' === $child_type ) {
-			$result['services'][] = $row;
-		} else {
-			$result['addons'][] = $row;
-		}
-	}
-
-	return $result;
-}
-
 function cmbwc_get_parent_qty_from_group_id( $group_id ) {
 	if ( empty( $group_id ) || empty( WC()->cart ) ) {
 		return 1;
@@ -637,16 +600,19 @@ function cmbwc_after_cart_item_quantity_update( $cart_item_key, $quantity, $old_
 	if ( ! empty( $item['cmbwc_data'] ) && is_array( $item['cmbwc_data'] ) ) {
 		$quantity = max( 1, absint( $quantity ) );
 		$cart->cart_contents[ $cart_item_key ]['cmbwc_data']['covers'] = $quantity;
-		cmbwc_sync_child_lines_for_group( $item['cmbwc_data']['group_id'], $quantity );
+
+		if ( ! empty( $item['cmbwc_data']['group_id'] ) ) {
+			cmbwc_sync_child_lines_for_group( $item['cmbwc_data']['group_id'], $quantity );
+		}
 		return;
 	}
 
 	if ( cmbwc_is_child_cart_item( $item ) ) {
-		$group_id    = ! empty( $item['cmbwc_child_item']['group_id'] ) ? $item['cmbwc_child_item']['group_id'] : '';
-		$follow      = ! empty( $item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $item['cmbwc_child_item']['follow_covers'];
-		$child_type  = ! empty( $item['cmbwc_child_item']['child_type'] ) ? $item['cmbwc_child_item']['child_type'] : 'addon';
-		$parent_qty  = cmbwc_get_parent_qty_from_group_id( $group_id );
-		$target_qty  = max( 1, absint( $quantity ) );
+		$group_id   = ! empty( $item['cmbwc_child_item']['group_id'] ) ? $item['cmbwc_child_item']['group_id'] : '';
+		$follow     = ! empty( $item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $item['cmbwc_child_item']['follow_covers'];
+		$child_type = ! empty( $item['cmbwc_child_item']['child_type'] ) ? $item['cmbwc_child_item']['child_type'] : 'addon';
+		$parent_qty = cmbwc_get_parent_qty_from_group_id( $group_id );
+		$target_qty = max( 1, absint( $quantity ) );
 
 		if ( $follow ) {
 			$target_qty = $parent_qty;
@@ -685,7 +651,76 @@ function cmbwc_disable_service_remove_link( $link, $cart_item_key ) {
 		return $link;
 	}
 
-	return '<span class="cmbwc-remove-disabled" aria-hidden="true">&nbsp;</span>';
+	return '';
+}
+
+add_filter( 'woocommerce_widget_cart_item_quantity', 'cmbwc_disable_service_remove_link_in_widget_markup', 30, 3 );
+
+function cmbwc_disable_service_remove_link_in_widget_markup( $html, $cart_item, $cart_item_key ) {
+	if ( empty( $cart_item['cmbwc_child_item']['child_type'] ) || 'service' !== $cart_item['cmbwc_child_item']['child_type'] ) {
+		return $html;
+	}
+
+	return $html;
+}
+
+add_filter( 'woocommerce_cart_item_class', 'cmbwc_add_service_item_class', 20, 3 );
+
+function cmbwc_add_service_item_class( $class, $cart_item, $cart_item_key ) {
+	if ( ! empty( $cart_item['cmbwc_child_item']['child_type'] ) && 'service' === $cart_item['cmbwc_child_item']['child_type'] ) {
+		$class .= ' cmbwc-service-line';
+	}
+
+	return $class;
+}
+
+add_filter( 'woocommerce_add_to_cart_fragments', 'cmbwc_strip_service_remove_links_from_minicart', 20, 1 );
+
+function cmbwc_strip_service_remove_links_from_minicart( $fragments ) {
+	if ( empty( WC()->cart ) ) {
+		return $fragments;
+	}
+
+	ob_start();
+	woocommerce_mini_cart();
+	$fragments['div.widget_shopping_cart_content'] = '<div class="widget_shopping_cart_content">' . ob_get_clean() . '</div>';
+
+	return $fragments;
+}
+
+add_filter( 'woocommerce_cart_item_permalink', 'cmbwc_service_cart_item_permalink', 20, 3 );
+
+function cmbwc_service_cart_item_permalink( $permalink, $cart_item, $cart_item_key ) {
+	return $permalink;
+}
+
+add_action( 'woocommerce_remove_cart_item', 'cmbwc_restore_service_if_removed_directly', 5, 2 );
+
+function cmbwc_restore_service_if_removed_directly( $cart_item_key, $cart ) {
+	$removed = isset( $cart->removed_cart_contents[ $cart_item_key ] ) ? $cart->removed_cart_contents[ $cart_item_key ] : null;
+
+	if ( empty( $removed['cmbwc_child_item']['child_type'] ) || 'service' !== $removed['cmbwc_child_item']['child_type'] ) {
+		return;
+	}
+
+	$product_id = isset( $removed['product_id'] ) ? absint( $removed['product_id'] ) : 0;
+	$qty        = isset( $removed['quantity'] ) ? absint( $removed['quantity'] ) : 1;
+
+	if ( ! $product_id ) {
+		return;
+	}
+
+	$cart->add_to_cart(
+		$product_id,
+		max( 1, $qty ),
+		0,
+		array(),
+		array(
+			'cmbwc_child_item' => $removed['cmbwc_child_item'],
+			'cmbwc_service_price_override' => isset( $removed['cmbwc_service_price_override'] ) ? $removed['cmbwc_service_price_override'] : null,
+			'unique_key' => md5( 'restore_service_' . $cart_item_key . '_' . microtime() ),
+		)
+	);
 }
 
 add_action( 'woocommerce_remove_cart_item', 'cmbwc_remove_child_lines_with_parent', 10, 2 );
