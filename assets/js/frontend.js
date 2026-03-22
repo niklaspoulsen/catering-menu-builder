@@ -54,11 +54,24 @@ jQuery(function ($) {
 		return covers;
 	}
 
+	function syncVisualState($box) {
+		$box.find('.cmbwc-addon-item').each(function () {
+			var $item = $(this);
+			var checked = $item.find('.cmbwc-addon-checkbox').prop('checked');
+			$item.toggleClass('is-selected', !!checked);
+		});
+
+		$box.find('.cmbwc-service-item').each(function () {
+			var $item = $(this);
+			var checked = $item.find('.cmbwc-service-radio').prop('checked');
+			$item.toggleClass('is-selected', !!checked);
+		});
+	}
+
 	function syncAddonQtyState($box, covers) {
 		$box.find('.cmbwc-addon-item').each(function () {
 			var $item = $(this);
-			var $checkbox = $item.find('.cmbwc-addon-checkbox');
-			var checked = $checkbox.prop('checked');
+			var checked = $item.find('.cmbwc-addon-checkbox').prop('checked');
 			var followCovers = String($item.attr('data-follow-covers')) === 'yes';
 			var $qty = $item.find('.cmbwc-addon-qty');
 
@@ -86,14 +99,9 @@ jQuery(function ($) {
 		var total = 0;
 		var selected = [];
 
-		$box.find('.cmbwc-addon-item').each(function () {
-			var $item = $(this);
-			var $checkbox = $item.find('.cmbwc-addon-checkbox');
-			var checked = $checkbox.prop('checked');
-
-			if (!checked) {
-				return;
-			}
+		$box.find('.cmbwc-addon-checkbox:checked').each(function () {
+			var $checkbox = $(this);
+			var $item = $checkbox.closest('.cmbwc-addon-item');
 
 			var addonId = getInt($item.attr('data-addon-id'), 0);
 			var addonPrice = getNumber($item.attr('data-addon-price'), 0);
@@ -149,11 +157,6 @@ jQuery(function ($) {
 
 		var addonsJson = JSON.stringify(addonData.selected);
 
-		var $wooQty = $form.find('input.qty').first();
-		if ($wooQty.length) {
-			$wooQty.val(covers).trigger('change');
-		}
-
 		$form.find('input[name="cmbwc_covers"]').val(String(covers));
 		$form.find('input[name="cmbwc_selected_service"]').val(serviceData.selected);
 		$form.find('input[name="cmbwc_selected_addons"]').val(addonsJson);
@@ -171,6 +174,7 @@ jQuery(function ($) {
 		var covers = normalizeCovers($box);
 		var pricePerCover = getNumber($box.attr('data-price-per-cover'), 0);
 
+		syncVisualState($box);
 		syncAddonQtyState($box, covers);
 
 		var menuTotal = pricePerCover * covers;
@@ -194,11 +198,7 @@ jQuery(function ($) {
 		});
 	}
 
-	$(document).on('input change', '.cmbwc-covers', function () {
-		updateBox($(this).closest('.cmbwc-menu-options'));
-	});
-
-	$(document).on('change click', '.cmbwc-addon-checkbox', function () {
+	$(document).on('change', '.cmbwc-addon-checkbox', function () {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
@@ -206,25 +206,12 @@ jQuery(function ($) {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$(document).on('change click', '.cmbwc-service-radio', function () {
+	$(document).on('change', '.cmbwc-service-radio', function () {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$(document).on('click', '.cmbwc-addon-item', function (e) {
-		if ($(e.target).is('input, label')) {
-			return;
-		}
-
-		var $checkbox = $(this).find('.cmbwc-addon-checkbox').first();
-		$checkbox.prop('checked', !$checkbox.prop('checked')).trigger('change');
-	});
-
-	$(document).on('click', '.cmbwc-service-item', function (e) {
-		if ($(e.target).is('input')) {
-			return;
-		}
-
-		$(this).find('.cmbwc-service-radio').first().prop('checked', true).trigger('change');
+	$(document).on('input change', '.cmbwc-covers', function () {
+		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
 	$(document).on('submit', 'form.cart', function () {

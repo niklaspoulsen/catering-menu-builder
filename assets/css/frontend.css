@@ -435,3 +435,21 @@
 		width: 100%;
 	}
 }
+
+.cmbwc-addon-label,
+.cmbwc-service-item {
+	cursor: pointer;
+}
+
+.cmbwc-choice-control,
+.cmbwc-addon-name-wrap,
+.cmbwc-addon-follow-price,
+.cmbwc-service-price-wrap {
+	pointer-events: none;
+}
+
+.cmbwc-addon-item.is-selected,
+.cmbwc-service-item.is-selected {
+	outline: 2px solid #c6924b;
+	outline-offset: 0;
+}
