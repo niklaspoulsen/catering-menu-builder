@@ -54,6 +54,10 @@ function cmbwc_format_compact_price( $price ) {
 	return number_format_i18n( $price, 0 ) . ',-';
 }
 
+function cmbwc_get_service_price_suffix( $price_type ) {
+	return 'per_cover' === $price_type ? 'pr. kuvert' : 'fast pris';
+}
+
 function cmbwc_shortcode_menu_info() {
 	$product = cmbwc_get_current_product();
 
@@ -217,7 +221,6 @@ function cmbwc_shortcode_menu_options() {
 			'id'            => $addon_product_id,
 			'name'          => $addon_product->get_name(),
 			'price'         => $addon_price,
-			'price_html'    => wc_price( $addon_price ),
 			'price_compact' => cmbwc_format_compact_price( $addon_price ),
 			'follow_covers' => $follow_covers,
 			'price_suffix'  => 'yes' === $follow_covers ? 'pr. kuvert' : 'stk.',
@@ -233,12 +236,16 @@ function cmbwc_shortcode_menu_options() {
 		}
 
 		$service_data = $service_all[ $service_key ];
+		$price_type   = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
+		$price        = isset( $service_data['price'] ) ? (float) $service_data['price'] : 0;
 
 		$services_for_output[] = array(
-			'key'        => $service_key,
-			'label'      => isset( $service_data['label'] ) ? $service_data['label'] : $service_key,
-			'price'      => isset( $service_data['price'] ) ? (float) $service_data['price'] : 0,
-			'price_type' => isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed',
+			'key'           => $service_key,
+			'label'         => isset( $service_data['label'] ) ? $service_data['label'] : $service_key,
+			'price'         => $price,
+			'price_type'    => $price_type,
+			'price_compact' => cmbwc_format_compact_price( $price ),
+			'price_suffix'  => cmbwc_get_service_price_suffix( $price_type ),
 		);
 	}
 
@@ -281,9 +288,11 @@ function cmbwc_shortcode_menu_options() {
 								<span class="cmbwc-addon-left cmbwc-choice-left">
 									<input
 										type="checkbox"
-										class="cmbwc-addon-checkbox cmbwc-choice-input"
+										class="cmbwc-addon-checkbox cmbwc-choice-input cmbwc-visually-hidden-input"
 										value="<?php echo esc_attr( $addon['id'] ); ?>"
 									>
+
+									<span class="cmbwc-choice-control cmbwc-choice-control-checkbox" aria-hidden="true"></span>
 
 									<?php if ( ! empty( $addon['image'] ) ) : ?>
 										<img class="cmbwc-addon-image cmbwc-choice-image" src="<?php echo esc_url( $addon['image'] ); ?>" alt="<?php echo esc_attr( $addon['name'] ); ?>">
@@ -291,12 +300,16 @@ function cmbwc_shortcode_menu_options() {
 
 									<span class="cmbwc-addon-name-wrap cmbwc-choice-content">
 										<span class="cmbwc-addon-name cmbwc-ui-title"><?php echo esc_html( $addon['name'] ); ?></span>
-										<span class="cmbwc-addon-price cmbwc-ui-subtitle"><?php echo wp_kses_post( $addon['price_html'] ); ?></span>
 									</span>
 								</span>
 
 								<?php if ( 'no' === $addon['follow_covers'] ) : ?>
-									<span class="cmbwc-addon-qty-wrap cmbwc-choice-right cmbwc-choice-right-qty">
+									<span class="cmbwc-addon-right-wrap cmbwc-choice-right cmbwc-choice-right-qty">
+										<span class="cmbwc-addon-right-price cmbwc-choice-right-price" aria-hidden="true">
+											<span class="cmbwc-addon-follow-price-value cmbwc-price-big"><?php echo esc_html( $addon['price_compact'] ); ?></span>
+											<span class="cmbwc-addon-follow-price-note cmbwc-price-small"><?php echo esc_html( $addon['price_suffix'] ); ?></span>
+										</span>
+
 										<input
 											type="number"
 											class="cmbwc-addon-qty cmbwc-input cmbwc-input-addon-qty"
@@ -330,25 +343,25 @@ function cmbwc_shortcode_menu_options() {
 							data-service-price="<?php echo esc_attr( $service['price'] ); ?>"
 							data-service-price-type="<?php echo esc_attr( $service['price_type'] ); ?>"
 						>
-							<input
-								type="radio"
-								name="cmbwc_service_choice_<?php echo esc_attr( $product_id ); ?>"
-								class="cmbwc-service-radio cmbwc-choice-input"
-								value="<?php echo esc_attr( $service['key'] ); ?>"
-								<?php checked( 0 === $index ); ?>
-							>
+							<span class="cmbwc-service-left cmbwc-choice-left">
+								<input
+									type="radio"
+									name="cmbwc_service_choice_<?php echo esc_attr( $product_id ); ?>"
+									class="cmbwc-service-radio cmbwc-choice-input cmbwc-visually-hidden-input"
+									value="<?php echo esc_attr( $service['key'] ); ?>"
+									<?php checked( 0 === $index ); ?>
+								>
 
-							<span class="cmbwc-service-content cmbwc-choice-content">
-								<span class="cmbwc-service-name cmbwc-ui-title"><?php echo esc_html( $service['label'] ); ?></span>
-								<span class="cmbwc-service-price cmbwc-ui-subtitle">
-									<?php
-									echo wp_kses_post(
-										'fixed' === $service['price_type']
-											? wc_price( $service['price'] )
-											: wc_price( $service['price'] ) . ' pr. kuvert'
-									);
-									?>
+								<span class="cmbwc-choice-control cmbwc-choice-control-radio" aria-hidden="true"></span>
+
+								<span class="cmbwc-service-content cmbwc-choice-content">
+									<span class="cmbwc-service-name cmbwc-ui-title"><?php echo esc_html( $service['label'] ); ?></span>
 								</span>
+							</span>
+
+							<span class="cmbwc-service-price-wrap cmbwc-choice-right cmbwc-choice-right-price" aria-hidden="true">
+								<span class="cmbwc-service-price-value cmbwc-price-big"><?php echo esc_html( $service['price_compact'] ); ?></span>
+								<span class="cmbwc-service-price-note cmbwc-price-small"><?php echo esc_html( $service['price_suffix'] ); ?></span>
 							</span>
 						</label>
 					<?php endforeach; ?>
