@@ -234,50 +234,42 @@ function cmbwc_get_order_bon_printed_at( $order_id ) {
 function cmbwc_can_use_printnode() {
 	global $woocommerce_simba_printorders_printnode;
 
-	return is_object( $woocommerce_simba_printorders_printnode ) && method_exists( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' );
+	return is_object( $woocommerce_simba_printorders_printnode );
 }
 
 /**
- * Finder første enabled PrintNode printer-id.
+ * Hent første enabled printer-id fra PrintNode-pluginets egne settings.
  */
 function cmbwc_get_enabled_printnode_printer_id() {
-	$possible_option_keys = array(
-		'woocommerce_printnode_printers',
-		'printnode_printers',
-		'woocommerce_simba_printorders_printnode_printers',
-	);
+	$printers = get_option( 'woocommerce_printnode_printers', array() );
 
-	foreach ( $possible_option_keys as $option_key ) {
-		$printers = get_option( $option_key, array() );
+	if ( ! is_array( $printers ) || empty( $printers ) ) {
+		return 0;
+	}
 
-		if ( empty( $printers ) || ! is_array( $printers ) ) {
+	foreach ( $printers as $printer ) {
+		if ( ! is_array( $printer ) ) {
 			continue;
 		}
 
-		foreach ( $printers as $printer ) {
-			if ( ! is_array( $printer ) ) {
-				continue;
-			}
+		$is_enabled = false;
 
-			$is_enabled = false;
+		if ( isset( $printer['enabled'] ) ) {
+			$is_enabled = in_array( $printer['enabled'], array( 1, '1', true, 'true', 'yes', 'on' ), true );
+		} elseif ( isset( $printer['is_enabled'] ) ) {
+			$is_enabled = in_array( $printer['is_enabled'], array( 1, '1', true, 'true', 'yes', 'on' ), true );
+		}
 
-			if ( isset( $printer['enabled'] ) ) {
-				$is_enabled = in_array( $printer['enabled'], array( 1, '1', true, 'true', 'yes', 'on' ), true );
-			} elseif ( isset( $printer['is_enabled'] ) ) {
-				$is_enabled = in_array( $printer['is_enabled'], array( 1, '1', true, 'true', 'yes', 'on' ), true );
-			}
+		if ( ! $is_enabled ) {
+			continue;
+		}
 
-			if ( ! $is_enabled ) {
-				continue;
-			}
+		if ( ! empty( $printer['id'] ) ) {
+			return absint( $printer['id'] );
+		}
 
-			if ( ! empty( $printer['id'] ) ) {
-				return absint( $printer['id'] );
-			}
-
-			if ( ! empty( $printer['printer_id'] ) ) {
-				return absint( $printer['printer_id'] );
-			}
+		if ( ! empty( $printer['printer_id'] ) ) {
+			return absint( $printer['printer_id'] );
 		}
 	}
 
@@ -553,7 +545,7 @@ function cmbwc_force_order_list_preview_blank_target() {
 }
 
 /**
- * Send ordre til PrintNode.
+ * Send ordre til PrintNode ved at trigge samme order-action som pluginets egen knap.
  */
 function cmbwc_send_order_to_printnode( $order_id ) {
 	$order_id = absint( $order_id );
@@ -566,28 +558,33 @@ function cmbwc_send_order_to_printnode( $order_id ) {
 		return false;
 	}
 
+	$order = wc_get_order( $order_id );
+
+	if ( ! $order ) {
+		return false;
+	}
+
 	global $woocommerce_simba_printorders_printnode;
 
 	$printer_id = cmbwc_get_enabled_printnode_printer_id();
 
-	try {
-		if ( $printer_id > 0 ) {
-			$ref = new ReflectionMethod( $woocommerce_simba_printorders_printnode, 'woocommerce_print_order_go' );
-			$arg_count = $ref->getNumberOfParameters();
-
-			if ( $arg_count >= 2 ) {
-				$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id, $printer_id );
-			} else {
-				$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id );
-			}
-		} else {
-			$woocommerce_simba_printorders_printnode->woocommerce_print_order_go( $order_id );
-		}
-	} catch ( Exception $e ) {
-		return false;
-	} catch ( Error $e ) {
+	if ( ! $printer_id ) {
 		return false;
 	}
+
+	// Sørg for at pluginet har registreret sine Woo order-actions.
+	if ( method_exists( $woocommerce_simba_printorders_printnode, 'register_woocommerce_order_actions' ) ) {
+		$woocommerce_simba_printorders_printnode->register_woocommerce_order_actions();
+	}
+
+	// "internal" er Simple order summary-kilden i pluginet.
+	$action = 'woocommerce_order_action_print-orders-printnode-' . $printer_id . '___internal';
+
+	/**
+	 * Dette matcher den action, pluginet selv registrerer:
+	 * woocommerce_order_action_print-orders-printnode-{printer_id}___internal
+	 */
+	do_action( $action, $order );
 
 	if ( 'yes' === cmbwc_get_print_setting( 'auto_mark_printed', 'yes' ) ) {
 		cmbwc_mark_order_bon_printed( $order_id );
