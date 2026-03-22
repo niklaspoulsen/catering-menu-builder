@@ -3,7 +3,7 @@
  * Plugin Name: Catering Menu Builder
  * Description: Custom catering menu builder for WooCommerce.
  * Version: 1.0.0
- * Author: Your Name
+ * Author: Niklas Poulsen
  * Text Domain: catering-menu-builder
  */
 
