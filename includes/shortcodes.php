@@ -54,7 +54,22 @@ function cmbwc_format_compact_price( $price ) {
 	return number_format_i18n( $price, 0 ) . ',-';
 }
 
-function cmbwc_get_service_price_suffix( $price_type ) {
+function cmbwc_get_service_price_suffix( $service_data ) {
+	if ( ! is_array( $service_data ) ) {
+		return '';
+	}
+
+	if ( ! empty( $service_data['price_note'] ) ) {
+		return sanitize_text_field( $service_data['price_note'] );
+	}
+
+	$price_type = isset( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
+	$is_deposit = isset( $service_data['is_deposit'] ) ? $service_data['is_deposit'] : 'no';
+
+	if ( 'yes' === $is_deposit ) {
+		return 'depositum';
+	}
+
 	return 'per_cover' === $price_type ? 'pr. kuvert' : 'fast pris';
 }
 
@@ -245,7 +260,7 @@ function cmbwc_shortcode_menu_options() {
 			'price'         => $price,
 			'price_type'    => $price_type,
 			'price_compact' => cmbwc_format_compact_price( $price ),
-			'price_suffix'  => cmbwc_get_service_price_suffix( $price_type ),
+			'price_suffix'  => cmbwc_get_service_price_suffix( $service_data ),
 		);
 	}
 
