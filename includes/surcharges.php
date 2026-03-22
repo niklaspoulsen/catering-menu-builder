@@ -32,7 +32,6 @@ if ( ! function_exists( 'cmbwc_get_selected_delivery_date_ymd' ) ) {
 	function cmbwc_get_selected_delivery_date_ymd() {
 		if ( class_exists( 'WCR_Session' ) && method_exists( 'WCR_Session', 'get_session' ) ) {
 			$date = WCR_Session::get_session( 'wcr_delivery_date', '' );
-
 			if ( ! empty( $date ) ) {
 				return cmbwc_surcharge_parse_date_to_ymd( $date );
 			}
@@ -49,35 +48,38 @@ if ( ! function_exists( 'cmbwc_get_selected_delivery_date_ymd' ) ) {
 	}
 }
 
-if ( ! function_exists( 'cmbwc_get_selected_shipping_kind' ) ) {
-	function cmbwc_get_selected_shipping_kind() {
+if ( ! function_exists( 'cmbwc_get_selected_shipping_method_key' ) ) {
+	function cmbwc_get_selected_shipping_method_key() {
 		if ( ! function_exists( 'WC' ) || ! WC()->session ) {
-			return 'delivery';
+			return '';
 		}
 
 		$chosen_methods = WC()->session->get( 'chosen_shipping_methods' );
 
 		if ( empty( $chosen_methods ) || ! is_array( $chosen_methods ) ) {
+			return '';
+		}
+
+		return (string) reset( $chosen_methods );
+	}
+}
+
+if ( ! function_exists( 'cmbwc_get_shipping_kind_from_method' ) ) {
+	function cmbwc_get_shipping_kind_from_method( $method_key ) {
+		$settings = function_exists( 'cmbwc_get_surcharge_settings' ) ? cmbwc_get_surcharge_settings() : array();
+
+		$pickup_methods   = ! empty( $settings['pickup_methods'] ) && is_array( $settings['pickup_methods'] ) ? $settings['pickup_methods'] : array();
+		$delivery_methods = ! empty( $settings['delivery_methods'] ) && is_array( $settings['delivery_methods'] ) ? $settings['delivery_methods'] : array();
+
+		if ( in_array( $method_key, $pickup_methods, true ) ) {
+			return 'pickup';
+		}
+
+		if ( in_array( $method_key, $delivery_methods, true ) ) {
 			return 'delivery';
 		}
 
-		$method = strtolower( (string) reset( $chosen_methods ) );
-
-		$pickup_keywords = array(
-			'local_pickup',
-			'local pickup',
-			'pickup',
-			'afhent',
-			'afhentning',
-		);
-
-		foreach ( $pickup_keywords as $keyword ) {
-			if ( false !== strpos( $method, strtolower( $keyword ) ) ) {
-				return 'pickup';
-			}
-		}
-
-		return 'delivery';
+		return '';
 	}
 }
 
@@ -96,7 +98,11 @@ if ( ! function_exists( 'cmbwc_get_weekday_surcharge_amount' ) ) {
 			return isset( $settings['pickup_weekdays'][ $weekday ] ) ? (float) $settings['pickup_weekdays'][ $weekday ] : 0;
 		}
 
-		return isset( $settings['delivery_weekdays'][ $weekday ] ) ? (float) $settings['delivery_weekdays'][ $weekday ] : 0;
+		if ( 'delivery' === $shipping_kind ) {
+			return isset( $settings['delivery_weekdays'][ $weekday ] ) ? (float) $settings['delivery_weekdays'][ $weekday ] : 0;
+		}
+
+		return 0;
 	}
 }
 
@@ -126,9 +132,13 @@ if ( ! function_exists( 'cmbwc_get_special_date_surcharge_rows' ) ) {
 				continue;
 			}
 
-			$amount = 'pickup' === $shipping_kind
-				? ( isset( $row['pickup_fee'] ) ? (float) $row['pickup_fee'] : 0 )
-				: ( isset( $row['delivery_fee'] ) ? (float) $row['delivery_fee'] : 0 );
+			$amount = 0;
+
+			if ( 'pickup' === $shipping_kind ) {
+				$amount = isset( $row['pickup_fee'] ) ? (float) $row['pickup_fee'] : 0;
+			} elseif ( 'delivery' === $shipping_kind ) {
+				$amount = isset( $row['delivery_fee'] ) ? (float) $row['delivery_fee'] : 0;
+			}
 
 			if ( $amount <= 0 ) {
 				continue;
@@ -152,21 +162,24 @@ function cmbwc_add_date_based_surcharges( $cart ) {
 		return;
 	}
 
-	if ( ! $cart || ! is_a( $cart, 'WC_Cart' ) ) {
-		return;
-	}
-
-	if ( $cart->is_empty() ) {
+	if ( ! $cart || ! is_a( $cart, 'WC_Cart' ) || $cart->is_empty() ) {
 		return;
 	}
 
 	$delivery_date_ymd = cmbwc_get_selected_delivery_date_ymd();
-
 	if ( '' === $delivery_date_ymd ) {
 		return;
 	}
 
-	$shipping_kind = cmbwc_get_selected_shipping_kind();
+	$method_key = cmbwc_get_selected_shipping_method_key();
+	if ( '' === $method_key ) {
+		return;
+	}
+
+	$shipping_kind = cmbwc_get_shipping_kind_from_method( $method_key );
+	if ( '' === $shipping_kind ) {
+		return;
+	}
 
 	$weekday_amount = cmbwc_get_weekday_surcharge_amount( $shipping_kind, $delivery_date_ymd );
 
