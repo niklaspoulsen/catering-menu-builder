@@ -30,7 +30,7 @@ function cmbwc_get_service_options() {
 				'is_deposit' => 'yes',
 				'price_note' => 'depositum',
 			),
-			'disposable' => array(
+			'single_use' => array(
 				'label'      => 'Engangsfad & -skåle',
 				'price'      => 4,
 				'price_type' => 'per_cover',
@@ -42,7 +42,6 @@ function cmbwc_get_service_options() {
 		update_option( 'cmbwc_service_options', $service_options );
 	}
 
-	// Sørg for bagudkompatibilitet hvis gamle entries mangler price_note.
 	foreach ( $service_options as $key => $option ) {
 		$price_type = isset( $option['price_type'] ) ? $option['price_type'] : 'fixed';
 		$is_deposit = isset( $option['is_deposit'] ) ? $option['is_deposit'] : 'no';
@@ -79,58 +78,69 @@ function cmbwc_render_service_option_row( $index, $key = '', $option = array() )
 	$price_note = isset( $option['price_note'] ) ? $option['price_note'] : cmbwc_get_default_service_price_note( $price_type, $is_deposit );
 	?>
 	<tr class="cmbwc-service-row">
-		<td>
+		<td class="cmbwc-col-key">
 			<input
 				type="text"
-				class="regular-text"
+				class="cmbwc-admin-input cmbwc-admin-input-key"
 				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][key]"
 				value="<?php echo esc_attr( $key ); ?>"
 				placeholder="fx tray_glass"
 			>
 		</td>
-		<td>
+
+		<td class="cmbwc-col-label">
 			<input
 				type="text"
-				class="regular-text"
+				class="cmbwc-admin-input cmbwc-admin-input-label"
 				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][label]"
 				value="<?php echo esc_attr( $label ); ?>"
-				style="width:100%;"
 				placeholder="Navn"
 			>
 		</td>
-		<td>
+
+		<td class="cmbwc-col-price">
 			<input
 				type="number"
 				step="0.01"
 				min="0"
+				class="cmbwc-admin-input cmbwc-admin-input-price"
 				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][price]"
 				value="<?php echo esc_attr( $price ); ?>"
 				placeholder="0"
 			>
 		</td>
-		<td>
-			<select name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][price_type]">
+
+		<td class="cmbwc-col-price-type">
+			<select
+				class="cmbwc-admin-select cmbwc-admin-select-price-type"
+				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][price_type]"
+			>
 				<option value="fixed" <?php selected( $price_type, 'fixed' ); ?>>Fast pris</option>
 				<option value="per_cover" <?php selected( $price_type, 'per_cover' ); ?>>Pr. kuvert</option>
 			</select>
 		</td>
-		<td>
-			<select name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][is_deposit]">
+
+		<td class="cmbwc-col-deposit">
+			<select
+				class="cmbwc-admin-select cmbwc-admin-select-deposit"
+				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][is_deposit]"
+			>
 				<option value="no" <?php selected( $is_deposit, 'no' ); ?>>Nej</option>
 				<option value="yes" <?php selected( $is_deposit, 'yes' ); ?>>Ja</option>
 			</select>
 		</td>
-		<td>
+
+		<td class="cmbwc-col-note">
 			<input
 				type="text"
-				class="regular-text"
+				class="cmbwc-admin-input cmbwc-admin-input-note"
 				name="cmbwc_service_options[<?php echo esc_attr( $index ); ?>][price_note]"
 				value="<?php echo esc_attr( $price_note ); ?>"
-				style="width:100%;"
 				placeholder="fx depositum / pr. kuvert"
 			>
 		</td>
-		<td style="width:90px;">
+
+		<td class="cmbwc-col-actions">
 			<button type="button" class="button-link-delete cmbwc-remove-service-row">Fjern</button>
 		</td>
 	</tr>
@@ -158,12 +168,12 @@ function cmbwc_render_service_options_page() {
 					continue;
 				}
 
-				$key_raw      = isset( $row['key'] ) ? sanitize_title( $row['key'] ) : '';
-				$label        = isset( $row['label'] ) ? sanitize_text_field( $row['label'] ) : '';
-				$price        = isset( $row['price'] ) ? wc_format_decimal( $row['price'] ) : 0;
-				$price_type   = isset( $row['price_type'] ) && 'per_cover' === $row['price_type'] ? 'per_cover' : 'fixed';
-				$is_deposit   = isset( $row['is_deposit'] ) && 'yes' === $row['is_deposit'] ? 'yes' : 'no';
-				$price_note   = isset( $row['price_note'] ) ? sanitize_text_field( $row['price_note'] ) : '';
+				$key_raw    = isset( $row['key'] ) ? sanitize_title( $row['key'] ) : '';
+				$label      = isset( $row['label'] ) ? sanitize_text_field( $row['label'] ) : '';
+				$price      = isset( $row['price'] ) ? wc_format_decimal( $row['price'] ) : 0;
+				$price_type = isset( $row['price_type'] ) && 'per_cover' === $row['price_type'] ? 'per_cover' : 'fixed';
+				$is_deposit = isset( $row['is_deposit'] ) && 'yes' === $row['is_deposit'] ? 'yes' : 'no';
+				$price_note = isset( $row['price_note'] ) ? sanitize_text_field( $row['price_note'] ) : '';
 
 				if ( '' === $label ) {
 					continue;
@@ -196,23 +206,117 @@ function cmbwc_render_service_options_page() {
 
 	$options = cmbwc_get_service_options();
 	?>
-	<div class="wrap">
+	<div class="wrap cmbwc-admin-page cmbwc-admin-service-options-page">
 		<h1>Servicevalg</h1>
 		<p>Her vedligeholder du servicevalg, pris og teksten under prisen på frontend.</p>
+
+		<style>
+			.cmbwc-admin-service-options-page .cmbwc-service-options-table {
+				width: 100%;
+				max-width: 1320px;
+				table-layout: fixed;
+				border-collapse: collapse;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-service-options-table th,
+			.cmbwc-admin-service-options-page .cmbwc-service-options-table td {
+				vertical-align: middle;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-service-options-table th {
+				padding: 10px 12px;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-service-options-table td {
+				padding: 8px 10px;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-key {
+				width: 18%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-label {
+				width: 28%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-price {
+				width: 10%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-price-type {
+				width: 13%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-deposit {
+				width: 10%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-note {
+				width: 16%;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-col-actions {
+				width: 5%;
+				white-space: nowrap;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-admin-input,
+			.cmbwc-admin-service-options-page .cmbwc-admin-select {
+				width: 100%;
+				max-width: 100%;
+				box-sizing: border-box;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-admin-input-price {
+				min-width: 90px;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-admin-actions {
+				margin-top: 14px;
+				display: flex;
+				gap: 12px;
+				flex-wrap: wrap;
+				align-items: center;
+			}
+
+			.cmbwc-admin-service-options-page .cmbwc-remove-service-row {
+				color: #b32d2e;
+			}
+
+			@media (max-width: 1100px) {
+				.cmbwc-admin-service-options-page .cmbwc-service-options-table {
+					display: block;
+					overflow-x: auto;
+				}
+
+				.cmbwc-admin-service-options-page .cmbwc-service-options-table th,
+				.cmbwc-admin-service-options-page .cmbwc-service-options-table td {
+					min-width: 120px;
+				}
+
+				.cmbwc-admin-service-options-page .cmbwc-col-label {
+					min-width: 220px;
+				}
+
+				.cmbwc-admin-service-options-page .cmbwc-col-note {
+					min-width: 220px;
+				}
+			}
+		</style>
 
 		<form method="post">
 			<?php wp_nonce_field( 'cmbwc_save_service_options', 'cmbwc_service_options_nonce' ); ?>
 
-			<table class="widefat striped" style="max-width:1300px;">
+			<table class="widefat striped cmbwc-service-options-table">
 				<thead>
 					<tr>
-						<th style="width:180px;">Nøgle</th>
-						<th>Navn</th>
-						<th style="width:120px;">Pris</th>
-						<th style="width:160px;">Prismodel</th>
-						<th style="width:130px;">Depositum</th>
-						<th style="width:220px;">Tekst under pris</th>
-						<th style="width:90px;">Handling</th>
+						<th class="cmbwc-col-key">Nøgle</th>
+						<th class="cmbwc-col-label">Navn</th>
+						<th class="cmbwc-col-price">Pris</th>
+						<th class="cmbwc-col-price-type">Prismodel</th>
+						<th class="cmbwc-col-deposit">Depositum</th>
+						<th class="cmbwc-col-note">Tekst under pris</th>
+						<th class="cmbwc-col-actions">Handling</th>
 					</tr>
 				</thead>
 				<tbody id="cmbwc-service-options-rows">
@@ -224,13 +328,10 @@ function cmbwc_render_service_options_page() {
 				</tbody>
 			</table>
 
-			<p style="margin-top:12px;">
+			<div class="cmbwc-admin-actions">
 				<button type="button" class="button" id="cmbwc-add-service-row">Tilføj servicevalg</button>
-			</p>
-
-			<p style="margin-top:16px;">
 				<button type="submit" class="button button-primary">Gem servicevalg</button>
-			</p>
+			</div>
 		</form>
 	</div>
 
@@ -249,31 +350,31 @@ function cmbwc_render_service_options_page() {
 				const row = document.createElement('tr');
 				row.className = 'cmbwc-service-row';
 				row.innerHTML = `
-					<td>
-						<input type="text" class="regular-text" name="cmbwc_service_options[${nextIndex}][key]" value="" placeholder="fx tray_glass">
+					<td class="cmbwc-col-key">
+						<input type="text" class="cmbwc-admin-input cmbwc-admin-input-key" name="cmbwc_service_options[${nextIndex}][key]" value="" placeholder="fx tray_glass">
 					</td>
-					<td>
-						<input type="text" class="regular-text" name="cmbwc_service_options[${nextIndex}][label]" value="" style="width:100%;" placeholder="Navn">
+					<td class="cmbwc-col-label">
+						<input type="text" class="cmbwc-admin-input cmbwc-admin-input-label" name="cmbwc_service_options[${nextIndex}][label]" value="" placeholder="Navn">
 					</td>
-					<td>
-						<input type="number" step="0.01" min="0" name="cmbwc_service_options[${nextIndex}][price]" value="" placeholder="0">
+					<td class="cmbwc-col-price">
+						<input type="number" step="0.01" min="0" class="cmbwc-admin-input cmbwc-admin-input-price" name="cmbwc_service_options[${nextIndex}][price]" value="" placeholder="0">
 					</td>
-					<td>
-						<select name="cmbwc_service_options[${nextIndex}][price_type]">
+					<td class="cmbwc-col-price-type">
+						<select class="cmbwc-admin-select cmbwc-admin-select-price-type" name="cmbwc_service_options[${nextIndex}][price_type]">
 							<option value="fixed">Fast pris</option>
 							<option value="per_cover">Pr. kuvert</option>
 						</select>
 					</td>
-					<td>
-						<select name="cmbwc_service_options[${nextIndex}][is_deposit]">
+					<td class="cmbwc-col-deposit">
+						<select class="cmbwc-admin-select cmbwc-admin-select-deposit" name="cmbwc_service_options[${nextIndex}][is_deposit]">
 							<option value="no">Nej</option>
 							<option value="yes">Ja</option>
 						</select>
 					</td>
-					<td>
-						<input type="text" class="regular-text" name="cmbwc_service_options[${nextIndex}][price_note]" value="" style="width:100%;" placeholder="fx depositum / pr. kuvert">
+					<td class="cmbwc-col-note">
+						<input type="text" class="cmbwc-admin-input cmbwc-admin-input-note" name="cmbwc_service_options[${nextIndex}][price_note]" value="" placeholder="fx depositum / pr. kuvert">
 					</td>
-					<td style="width:90px;">
+					<td class="cmbwc-col-actions">
 						<button type="button" class="button-link-delete cmbwc-remove-service-row">Fjern</button>
 					</td>
 				`;
