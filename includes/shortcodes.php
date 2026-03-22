@@ -48,6 +48,12 @@ function cmbwc_get_product_image_url( $product_id, $size = 'thumbnail' ) {
 	return ! empty( $image[0] ) ? $image[0] : '';
 }
 
+function cmbwc_format_compact_price( $price ) {
+	$price = (float) $price;
+
+	return number_format_i18n( $price, 0 ) . ',-';
+}
+
 function cmbwc_shortcode_menu_info() {
 	$product = cmbwc_get_current_product();
 
@@ -55,9 +61,9 @@ function cmbwc_shortcode_menu_info() {
 		return '';
 	}
 
-	$product_id      = $product->get_id();
-	$minimum_covers  = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
-	$lead_time       = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
+	$product_id     = $product->get_id();
+	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+	$lead_time      = (int) get_post_meta( $product_id, '_cmbwc_lead_time_days', true );
 
 	if ( $minimum_covers < 1 ) {
 		$minimum_covers = 1;
@@ -65,19 +71,19 @@ function cmbwc_shortcode_menu_info() {
 
 	ob_start();
 	?>
-	<div class="cmbwc-box cmbwc-menu-info">
-		<h3 class="cmbwc-title">Menuinfo</h3>
+	<div class="cmbwc-box cmbwc-menu-info cmbwc-block cmbwc-block-menu-info">
+		<h3 class="cmbwc-title cmbwc-block-title">Menuinfo</h3>
 
-		<div class="cmbwc-info-list">
-			<div class="cmbwc-info-item">
-				<span class="cmbwc-info-label">Minimum kuverter</span>
-				<span class="cmbwc-info-value"><?php echo esc_html( $minimum_covers ); ?></span>
+		<div class="cmbwc-info-list cmbwc-list cmbwc-list-info">
+			<div class="cmbwc-info-item cmbwc-info-row cmbwc-row">
+				<span class="cmbwc-info-label cmbwc-label">Minimum kuverter</span>
+				<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( $minimum_covers ); ?></span>
 			</div>
 
 			<?php if ( $lead_time > 0 ) : ?>
-				<div class="cmbwc-info-item">
-					<span class="cmbwc-info-label">Bestilles senest</span>
-					<span class="cmbwc-info-value"><?php echo esc_html( cmbwc_format_day_label( $lead_time ) ); ?></span>
+				<div class="cmbwc-info-item cmbwc-info-row cmbwc-row">
+					<span class="cmbwc-info-label cmbwc-label">Bestilles senest</span>
+					<span class="cmbwc-info-value cmbwc-value"><?php echo esc_html( cmbwc_format_day_label( $lead_time ) ); ?></span>
 				</div>
 			<?php endif; ?>
 		</div>
@@ -134,24 +140,24 @@ function cmbwc_shortcode_menu_contents() {
 
 	ob_start();
 	?>
-	<div class="cmbwc-box cmbwc-menu-contents">
-		<h3 class="cmbwc-title">Indhold i menuen</h3>
+	<div class="cmbwc-box cmbwc-menu-contents cmbwc-block cmbwc-block-menu-contents">
+		<h3 class="cmbwc-title cmbwc-block-title">Indhold i menuen</h3>
 
 		<?php foreach ( $grouped as $category_name => $items ) : ?>
-			<div class="cmbwc-content-group">
-				<h4 class="cmbwc-subtitle"><?php echo esc_html( $category_name ); ?></h4>
+			<div class="cmbwc-content-group cmbwc-group cmbwc-content-category">
+				<h4 class="cmbwc-subtitle cmbwc-group-title"><?php echo esc_html( $category_name ); ?></h4>
 
-				<div class="cmbwc-card-list">
+				<div class="cmbwc-card-list cmbwc-list cmbwc-list-cards">
 					<?php foreach ( $items as $item ) : ?>
-						<div class="cmbwc-card">
+						<div class="cmbwc-card cmbwc-ui-card cmbwc-content-card">
 							<?php if ( ! empty( $item['image'] ) ) : ?>
-								<div class="cmbwc-card-image-wrap">
-									<img class="cmbwc-card-image" src="<?php echo esc_url( $item['image'] ); ?>" alt="<?php echo esc_attr( $item['name'] ); ?>">
+								<div class="cmbwc-card-image-wrap cmbwc-media-wrap">
+									<img class="cmbwc-card-image cmbwc-media" src="<?php echo esc_url( $item['image'] ); ?>" alt="<?php echo esc_attr( $item['name'] ); ?>">
 								</div>
 							<?php endif; ?>
 
-							<div class="cmbwc-card-content">
-								<div class="cmbwc-card-title"><?php echo esc_html( $item['name'] ); ?></div>
+							<div class="cmbwc-card-content cmbwc-content">
+								<div class="cmbwc-card-title cmbwc-ui-title"><?php echo esc_html( $item['name'] ); ?></div>
 							</div>
 						</div>
 					<?php endforeach; ?>
@@ -204,11 +210,17 @@ function cmbwc_shortcode_menu_options() {
 			continue;
 		}
 
+		$follow_covers = isset( $addon_data['follow_covers'] ) && 'yes' === $addon_data['follow_covers'] ? 'yes' : 'no';
+		$addon_price   = (float) $addon_product->get_price();
+
 		$addons_for_output[] = array(
 			'id'            => $addon_product_id,
 			'name'          => $addon_product->get_name(),
-			'price'         => (float) $addon_product->get_price(),
-			'follow_covers' => isset( $addon_data['follow_covers'] ) && 'yes' === $addon_data['follow_covers'] ? 'yes' : 'no',
+			'price'         => $addon_price,
+			'price_html'    => wc_price( $addon_price ),
+			'price_compact' => cmbwc_format_compact_price( $addon_price ),
+			'follow_covers' => $follow_covers,
+			'price_suffix'  => 'yes' === $follow_covers ? 'pr. kuvert' : 'stk.',
 			'image'         => cmbwc_get_product_image_url( $addon_product_id ),
 		);
 	}
@@ -233,20 +245,20 @@ function cmbwc_shortcode_menu_options() {
 	ob_start();
 	?>
 	<div
-		class="cmbwc-box cmbwc-menu-options"
+		class="cmbwc-box cmbwc-menu-options cmbwc-block cmbwc-block-menu-options"
 		data-product-id="<?php echo esc_attr( $product_id ); ?>"
 		data-price-per-cover="<?php echo esc_attr( $price_per_cover ); ?>"
 		data-minimum-covers="<?php echo esc_attr( $minimum_covers ); ?>"
 		data-cover-step="<?php echo esc_attr( $cover_step ); ?>"
 	>
-		<h3 class="cmbwc-title">Menuvalg</h3>
+		<h3 class="cmbwc-title cmbwc-block-title">Menuvalg</h3>
 
-		<div class="cmbwc-field">
-			<label for="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>"><strong>Antal kuverter</strong></label>
+		<div class="cmbwc-field cmbwc-form-row cmbwc-form-row-covers">
+			<label for="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>" class="cmbwc-label cmbwc-field-label"><strong>Antal kuverter</strong></label>
 			<input
 				type="number"
 				id="cmbwc_covers_<?php echo esc_attr( $product_id ); ?>"
-				class="cmbwc-covers"
+				class="cmbwc-covers cmbwc-input cmbwc-input-covers"
 				min="<?php echo esc_attr( $minimum_covers ); ?>"
 				step="<?php echo esc_attr( $cover_step ); ?>"
 				value="<?php echo esc_attr( $minimum_covers ); ?>"
@@ -254,45 +266,40 @@ function cmbwc_shortcode_menu_options() {
 		</div>
 
 		<?php if ( ! empty( $addons_for_output ) ) : ?>
-			<div class="cmbwc-section">
-				<h4 class="cmbwc-subtitle">Tilvalg</h4>
+			<div class="cmbwc-section cmbwc-group cmbwc-group-addons">
+				<h4 class="cmbwc-subtitle cmbwc-group-title">Tilvalg</h4>
 
-				<div class="cmbwc-addon-list">
+				<div class="cmbwc-addon-list cmbwc-list cmbwc-list-addons">
 					<?php foreach ( $addons_for_output as $addon ) : ?>
 						<div
-							class="cmbwc-addon-item"
+							class="cmbwc-addon-item cmbwc-ui-card cmbwc-choice-card cmbwc-choice-addon"
 							data-addon-id="<?php echo esc_attr( $addon['id'] ); ?>"
 							data-addon-price="<?php echo esc_attr( $addon['price'] ); ?>"
 							data-follow-covers="<?php echo esc_attr( $addon['follow_covers'] ); ?>"
 						>
-							<label class="cmbwc-addon-label">
-								<span class="cmbwc-addon-left">
+							<label class="cmbwc-addon-label cmbwc-choice-label">
+								<span class="cmbwc-addon-left cmbwc-choice-left">
 									<input
 										type="checkbox"
-										class="cmbwc-addon-checkbox"
+										class="cmbwc-addon-checkbox cmbwc-choice-input"
 										value="<?php echo esc_attr( $addon['id'] ); ?>"
 									>
 
 									<?php if ( ! empty( $addon['image'] ) ) : ?>
-										<img class="cmbwc-addon-image" src="<?php echo esc_url( $addon['image'] ); ?>" alt="<?php echo esc_attr( $addon['name'] ); ?>">
+										<img class="cmbwc-addon-image cmbwc-choice-image" src="<?php echo esc_url( $addon['image'] ); ?>" alt="<?php echo esc_attr( $addon['name'] ); ?>">
 									<?php endif; ?>
 
-									<span class="cmbwc-addon-name-wrap">
-										<span class="cmbwc-addon-name"><?php echo esc_html( $addon['name'] ); ?></span>
-										<span class="cmbwc-addon-price">
-											<?php echo wp_kses_post( wc_price( $addon['price'] ) ); ?>
-											<?php if ( 'yes' === $addon['follow_covers'] ) : ?>
-												<span class="cmbwc-addon-note">pr. kuvert</span>
-											<?php endif; ?>
-										</span>
+									<span class="cmbwc-addon-name-wrap cmbwc-choice-content">
+										<span class="cmbwc-addon-name cmbwc-ui-title"><?php echo esc_html( $addon['name'] ); ?></span>
+										<span class="cmbwc-addon-price cmbwc-ui-subtitle"><?php echo wp_kses_post( $addon['price_html'] ); ?></span>
 									</span>
 								</span>
 
 								<?php if ( 'no' === $addon['follow_covers'] ) : ?>
-									<span class="cmbwc-addon-qty-wrap">
+									<span class="cmbwc-addon-qty-wrap cmbwc-choice-right cmbwc-choice-right-qty">
 										<input
 											type="number"
-											class="cmbwc-addon-qty"
+											class="cmbwc-addon-qty cmbwc-input cmbwc-input-addon-qty"
 											min="1"
 											step="1"
 											value="1"
@@ -300,7 +307,10 @@ function cmbwc_shortcode_menu_options() {
 										>
 									</span>
 								<?php else : ?>
-									<span class="cmbwc-addon-follow-text">Følger kuvertantal</span>
+									<span class="cmbwc-addon-follow-price cmbwc-choice-right cmbwc-choice-right-price" aria-hidden="true">
+										<span class="cmbwc-addon-follow-price-value cmbwc-price-big"><?php echo esc_html( $addon['price_compact'] ); ?></span>
+										<span class="cmbwc-addon-follow-price-note cmbwc-price-small"><?php echo esc_html( $addon['price_suffix'] ); ?></span>
+									</span>
 								<?php endif; ?>
 							</label>
 						</div>
@@ -310,27 +320,27 @@ function cmbwc_shortcode_menu_options() {
 		<?php endif; ?>
 
 		<?php if ( ! empty( $services_for_output ) ) : ?>
-			<div class="cmbwc-section">
-				<h4 class="cmbwc-subtitle">Type af fad / anretning</h4>
+			<div class="cmbwc-section cmbwc-group cmbwc-group-services">
+				<h4 class="cmbwc-subtitle cmbwc-group-title">Type af fad / anretning</h4>
 
-				<div class="cmbwc-service-list">
+				<div class="cmbwc-service-list cmbwc-list cmbwc-list-services">
 					<?php foreach ( $services_for_output as $index => $service ) : ?>
 						<label
-							class="cmbwc-service-item"
+							class="cmbwc-service-item cmbwc-ui-card cmbwc-choice-card cmbwc-choice-service"
 							data-service-price="<?php echo esc_attr( $service['price'] ); ?>"
 							data-service-price-type="<?php echo esc_attr( $service['price_type'] ); ?>"
 						>
 							<input
 								type="radio"
 								name="cmbwc_service_choice_<?php echo esc_attr( $product_id ); ?>"
-								class="cmbwc-service-radio"
+								class="cmbwc-service-radio cmbwc-choice-input"
 								value="<?php echo esc_attr( $service['key'] ); ?>"
 								<?php checked( 0 === $index ); ?>
 							>
 
-							<span class="cmbwc-service-content">
-								<span class="cmbwc-service-name"><?php echo esc_html( $service['label'] ); ?></span>
-								<span class="cmbwc-service-price">
+							<span class="cmbwc-service-content cmbwc-choice-content">
+								<span class="cmbwc-service-name cmbwc-ui-title"><?php echo esc_html( $service['label'] ); ?></span>
+								<span class="cmbwc-service-price cmbwc-ui-subtitle">
 									<?php
 									echo wp_kses_post(
 										'fixed' === $service['price_type']
@@ -346,38 +356,38 @@ function cmbwc_shortcode_menu_options() {
 			</div>
 		<?php endif; ?>
 
-		<div class="cmbwc-section">
-			<h4 class="cmbwc-subtitle">Prisoversigt</h4>
+		<div class="cmbwc-section cmbwc-group cmbwc-group-pricing">
+			<h4 class="cmbwc-subtitle cmbwc-group-title">Prisoversigt</h4>
 
-			<div class="cmbwc-price-box">
-				<div class="cmbwc-price-row">
-					<span>Pris pr. kuvert</span>
-					<strong class="cmbwc-price-per-cover"><?php echo wp_kses_post( wc_price( $price_per_cover ) ); ?></strong>
+			<div class="cmbwc-price-box cmbwc-pricing-box">
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Pris pr. kuvert</span>
+					<strong class="cmbwc-price-per-cover cmbwc-value"><?php echo wp_kses_post( wc_price( $price_per_cover ) ); ?></strong>
 				</div>
 
-				<div class="cmbwc-price-row">
-					<span>Antal kuverter</span>
-					<strong class="cmbwc-cover-count"><?php echo esc_html( $minimum_covers ); ?></strong>
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Antal kuverter</span>
+					<strong class="cmbwc-cover-count cmbwc-value"><?php echo esc_html( $minimum_covers ); ?></strong>
 				</div>
 
-				<div class="cmbwc-price-row">
-					<span>Menupris</span>
-					<strong class="cmbwc-menu-total"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong>
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Menupris</span>
+					<strong class="cmbwc-menu-total cmbwc-value"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong>
 				</div>
 
-				<div class="cmbwc-price-row">
-					<span>Tilvalg</span>
-					<strong class="cmbwc-addon-total"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong>
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Tilvalg</span>
+					<strong class="cmbwc-addon-total cmbwc-value"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong>
 				</div>
 
-				<div class="cmbwc-price-row">
-					<span>Service</span>
-					<strong class="cmbwc-service-total"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong>
+				<div class="cmbwc-price-row cmbwc-row">
+					<span class="cmbwc-label">Service</span>
+					<strong class="cmbwc-service-total cmbwc-value"><?php echo wp_kses_post( wc_price( 0 ) ); ?></strong>
 				</div>
 
-				<div class="cmbwc-price-row cmbwc-price-row-total">
-					<span>Samlet pris</span>
-					<strong class="cmbwc-total-price"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong>
+				<div class="cmbwc-price-row cmbwc-price-row-total cmbwc-row cmbwc-row-total">
+					<span class="cmbwc-label">Samlet pris</span>
+					<strong class="cmbwc-total-price cmbwc-value"><?php echo wp_kses_post( wc_price( $price_per_cover * $minimum_covers ) ); ?></strong>
 				</div>
 			</div>
 		</div>
