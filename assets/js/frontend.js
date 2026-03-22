@@ -22,10 +22,33 @@ jQuery(function ($) {
 
 	function getWooForm($box) {
 		var $form = $box.closest('form.cart');
+
 		if ($form.length) {
 			return $form;
 		}
+
 		return $('form.cart').first();
+	}
+
+	function ensureFormFields($form, $box) {
+		if (!$form.length) {
+			return;
+		}
+
+		var minCovers = getInt($box.attr('data-minimum-covers'), 1);
+		var defaultService = $box.find('.cmbwc-service-radio:checked').first().val() || '';
+
+		if (!$form.find('input[name="cmbwc_covers"]').length) {
+			$form.append('<input type="hidden" name="cmbwc_covers" class="cmbwc-form-sync-covers" value="' + minCovers + '">');
+		}
+
+		if (!$form.find('input[name="cmbwc_selected_service"]').length) {
+			$form.append('<input type="hidden" name="cmbwc_selected_service" class="cmbwc-form-sync-service" value="' + defaultService + '">');
+		}
+
+		if (!$form.find('input[name="cmbwc_selected_addons"]').length) {
+			$form.append('<input type="hidden" name="cmbwc_selected_addons" class="cmbwc-form-sync-addons" value="[]">');
+		}
 	}
 
 	function normalizeCovers($box) {
@@ -154,6 +177,8 @@ jQuery(function ($) {
 		if (!$form.length) {
 			return;
 		}
+
+		ensureFormFields($form, $box);
 
 		var addonsJson = JSON.stringify(addonData.selected);
 

@@ -8,6 +8,40 @@ add_shortcode( 'cmbwc_menu_info', 'cmbwc_shortcode_menu_info' );
 add_shortcode( 'cmbwc_menu_contents', 'cmbwc_shortcode_menu_contents' );
 add_shortcode( 'cmbwc_menu_options', 'cmbwc_shortcode_menu_options' );
 
+add_action( 'woocommerce_before_add_to_cart_button', 'cmbwc_render_form_sync_fields', 5 );
+
+function cmbwc_render_form_sync_fields() {
+	global $product;
+
+	if ( ! $product || ! is_a( $product, 'WC_Product' ) ) {
+		return;
+	}
+
+	$product_id = $product->get_id();
+
+	if ( 'yes' !== get_post_meta( $product_id, '_cmbwc_is_menu', true ) ) {
+		return;
+	}
+
+	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
+
+	if ( $minimum_covers < 1 ) {
+		$minimum_covers = 1;
+	}
+
+	$service_keys = get_post_meta( $product_id, '_cmbwc_service_allowed', true );
+	if ( ! is_array( $service_keys ) ) {
+		$service_keys = array();
+	}
+
+	$default_service = ! empty( $service_keys[0] ) ? (string) $service_keys[0] : '';
+	?>
+	<input type="hidden" name="cmbwc_covers" class="cmbwc-form-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
+	<input type="hidden" name="cmbwc_selected_service" class="cmbwc-form-sync-service" value="<?php echo esc_attr( $default_service ); ?>">
+	<input type="hidden" name="cmbwc_selected_addons" class="cmbwc-form-sync-addons" value="[]">
+	<?php
+}
+
 function cmbwc_get_current_product() {
 	global $product, $post;
 
@@ -338,6 +372,8 @@ function cmbwc_shortcode_menu_options() {
 		);
 	}
 
+	$default_service = ! empty( $services_for_output[0]['key'] ) ? $services_for_output[0]['key'] : '';
+
 	ob_start();
 	?>
 	<div
@@ -494,12 +530,8 @@ function cmbwc_shortcode_menu_options() {
 			</div>
 		</div>
 
-		<input type="hidden" name="cmbwc_covers" class="cmbwc-woo-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
-		<input type="hidden" name="cmbwc_selected_service" class="cmbwc-woo-sync-service" value="<?php echo ! empty( $services_for_output[0]['key'] ) ? esc_attr( $services_for_output[0]['key'] ) : ''; ?>">
-		<input type="hidden" name="cmbwc_selected_addons" class="cmbwc-woo-sync-addons" value="[]">
-
 		<input type="hidden" class="cmbwc-local-sync-covers" value="<?php echo esc_attr( $minimum_covers ); ?>">
-		<input type="hidden" class="cmbwc-local-sync-service" value="<?php echo ! empty( $services_for_output[0]['key'] ) ? esc_attr( $services_for_output[0]['key'] ) : ''; ?>">
+		<input type="hidden" class="cmbwc-local-sync-service" value="<?php echo esc_attr( $default_service ); ?>">
 		<input type="hidden" class="cmbwc-local-sync-addons" value="[]">
 	</div>
 	<?php
