@@ -29,6 +29,32 @@ function cmbwc_is_menu_request( $product_id ) {
 	return $is_menu_product || $has_menu_request;
 }
 
+function cmbwc_is_service_deposit( $service_data ) {
+	return is_array( $service_data ) && ! empty( $service_data['is_deposit'] ) && 'yes' === $service_data['is_deposit'];
+}
+
+function cmbwc_service_should_follow_covers( $service_data ) {
+	if ( ! is_array( $service_data ) ) {
+		return false;
+	}
+
+	if ( cmbwc_is_service_deposit( $service_data ) ) {
+		return false;
+	}
+
+	$price_type = ! empty( $service_data['price_type'] ) ? (string) $service_data['price_type'] : 'fixed';
+
+	return 'per_cover' === $price_type;
+}
+
+function cmbwc_get_service_cart_qty( $service_data, $covers ) {
+	if ( cmbwc_is_service_deposit( $service_data ) ) {
+		return 1;
+	}
+
+	return cmbwc_service_should_follow_covers( $service_data ) ? max( 1, absint( $covers ) ) : 1;
+}
+
 function cmbwc_get_included_names_for_product( $product_id ) {
 	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
 
@@ -453,7 +479,6 @@ function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_ite
 		return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
 	}
 
-	// Child-linjer skal kun vise navn.
 	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
 		return $product_name;
 	}
@@ -548,12 +573,12 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 	}
 
 	if ( ! empty( $data['service_data'] ) && is_array( $data['service_data'] ) ) {
-		$service_data       = $data['service_data'];
-		$linked_product_id  = ! empty( $service_data['linked_product_id'] ) ? absint( $service_data['linked_product_id'] ) : 0;
-		$service_price_type = ! empty( $service_data['price_type'] ) ? $service_data['price_type'] : 'fixed';
+		$service_data      = $data['service_data'];
+		$linked_product_id = ! empty( $service_data['linked_product_id'] ) ? absint( $service_data['linked_product_id'] ) : 0;
 
 		if ( $linked_product_id ) {
-			$service_qty = 'per_cover' === $service_price_type ? $covers : 1;
+			$service_qty    = cmbwc_get_service_cart_qty( $service_data, $covers );
+			$follow_covers  = cmbwc_service_should_follow_covers( $service_data ) ? 'yes' : 'no';
 
 			WC()->cart->add_to_cart(
 				$linked_product_id,
@@ -567,7 +592,7 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 						'parent_name'        => $menu_name,
 						'child_type'         => 'service',
 						'source_key'         => ! empty( $data['selected_service'] ) ? $data['selected_service'] : '',
-						'follow_covers'      => 'per_cover' === $service_price_type ? 'yes' : 'no',
+						'follow_covers'      => $follow_covers,
 						'display_type_label' => 'Service',
 					),
 					'cmbwc_service_price_override' => isset( $service_data['price'] ) ? (float) $service_data['price'] : null,
@@ -599,6 +624,14 @@ function cmbwc_before_calculate_totals( $cart ) {
 
 			if ( (int) $cart_item['quantity'] !== $covers ) {
 				$cart->cart_contents[ $cart_item_key ]['quantity'] = $covers;
+			}
+		}
+
+		if ( cmbwc_is_child_cart_item( $cart_item ) && ! empty( $cart_item['cmbwc_child_item']['child_type'] ) && 'service' === $cart_item['cmbwc_child_item']['child_type'] ) {
+			$follow_covers = ! empty( $cart_item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $cart_item['cmbwc_child_item']['follow_covers'];
+
+			if ( ! $follow_covers && (int) $cart_item['quantity'] !== 1 ) {
+				$cart->cart_contents[ $cart_item_key ]['quantity'] = 1;
 			}
 		}
 
