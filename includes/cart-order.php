@@ -92,6 +92,7 @@ function cmbwc_child_service_locked_qty( $cart_item, $parent_qty ) {
 		return 1;
 	}
 
+	// Hvis vi eksplicit har låst qty ved oprettelse, så brug ALTID den.
 	if ( isset( $cart_item['cmbwc_child_item']['locked_qty'] ) ) {
 		$locked_qty = absint( $cart_item['cmbwc_child_item']['locked_qty'] );
 
@@ -651,7 +652,10 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 	}
 }
 
-add_action( 'woocommerce_before_calculate_totals', 'cmbwc_before_calculate_totals', 100 );
+add_action( 'woocommerce_before_calculate_totals', 'cmbwc_before_calculate_totals', 9999 );
+add_action( 'woocommerce_cart_loaded_from_session', 'cmbwc_force_locked_service_quantities', 9999 );
+add_action( 'woocommerce_before_cart', 'cmbwc_force_locked_service_quantities', 9999 );
+add_action( 'woocommerce_before_mini_cart', 'cmbwc_force_locked_service_quantities', 9999 );
 
 function cmbwc_before_calculate_totals( $cart ) {
 	if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
@@ -676,9 +680,7 @@ function cmbwc_before_calculate_totals( $cart ) {
 		}
 
 		if ( cmbwc_is_child_service_item( $cart_item ) ) {
-			$target_qty = cmbwc_child_service_follow_covers( $cart_item )
-				? cmbwc_get_parent_qty_from_group_id( $cart_item['cmbwc_child_item']['group_id'] )
-				: 1;
+			$target_qty = cmbwc_child_service_locked_qty( $cart_item, cmbwc_get_parent_qty_from_group_id( $cart_item['cmbwc_child_item']['group_id'] ) );
 
 			if ( (int) $cart_item['quantity'] !== $target_qty ) {
 				$cart->cart_contents[ $cart_item_key ]['quantity'] = $target_qty;
@@ -1000,4 +1002,28 @@ function cmbwc_format_order_item_meta_value( $display_value, $meta, $item ) {
 	}
 
 	return $display_value;
+}
+
+function cmbwc_force_locked_service_quantities( $cart = null ) {
+	if ( ! $cart && function_exists( 'WC' ) && WC()->cart ) {
+		$cart = WC()->cart;
+	}
+
+	if ( ! $cart || ! is_a( $cart, 'WC_Cart' ) ) {
+		return;
+	}
+
+	foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
+		if ( ! cmbwc_is_child_service_item( $cart_item ) ) {
+			continue;
+		}
+
+		$group_id   = ! empty( $cart_item['cmbwc_child_item']['group_id'] ) ? $cart_item['cmbwc_child_item']['group_id'] : '';
+		$parent_qty = cmbwc_get_parent_qty_from_group_id( $group_id );
+		$target_qty = cmbwc_child_service_locked_qty( $cart_item, $parent_qty );
+
+		if ( (int) $cart_item['quantity'] !== $target_qty ) {
+			$cart->set_quantity( $cart_item_key, $target_qty, false );
+		}
+	}
 }
