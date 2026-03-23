@@ -4,29 +4,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-function cmbwc_debug_log( $label, $value = null ) {
-	if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) {
-		return;
-	}
-
-	if ( null === $value ) {
-		error_log( 'CMBWC ' . $label );
-		return;
-	}
-
-	if ( is_array( $value ) || is_object( $value ) ) {
-		error_log( 'CMBWC ' . $label . '=' . wp_json_encode( $value ) );
-		return;
-	}
-
-	error_log( 'CMBWC ' . $label . '=' . (string) $value );
-}
-
 function cmbwc_is_menu_request( $product_id ) {
 	$is_menu_product  = 'yes' === get_post_meta( $product_id, '_cmbwc_is_menu', true );
 	$has_menu_request = isset( $_POST['cmbwc_covers'] ) || isset( $_POST['cmbwc_selected_addons'] ) || isset( $_POST['cmbwc_selected_service'] );
 
 	return $is_menu_product || $has_menu_request;
+}
+
+function cmbwc_get_service_option_data_by_source_key( $source_key ) {
+	if ( empty( $source_key ) || ! function_exists( 'cmbwc_get_service_option_by_key' ) ) {
+		return null;
+	}
+
+	$data = cmbwc_get_service_option_by_key( $source_key );
+
+	return is_array( $data ) ? $data : null;
 }
 
 function cmbwc_is_service_deposit( $service_data ) {
@@ -53,6 +45,14 @@ function cmbwc_get_service_cart_qty( $service_data, $covers ) {
 	}
 
 	return cmbwc_service_should_follow_covers( $service_data ) ? max( 1, absint( $covers ) ) : 1;
+}
+
+function cmbwc_get_child_service_data_from_cart_item( $cart_item ) {
+	if ( empty( $cart_item['cmbwc_child_item']['source_key'] ) ) {
+		return null;
+	}
+
+	return cmbwc_get_service_option_data_by_source_key( $cart_item['cmbwc_child_item']['source_key'] );
 }
 
 function cmbwc_get_included_names_for_product( $product_id ) {
@@ -229,14 +229,18 @@ function cmbwc_sync_child_lines_for_group( $group_id, $parent_qty ) {
 			continue;
 		}
 
-		$follow_covers = ! empty( $child_item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $child_item['cmbwc_child_item']['follow_covers'];
-		$child_type    = ! empty( $child_item['cmbwc_child_item']['child_type'] ) ? $child_item['cmbwc_child_item']['child_type'] : 'addon';
-		$target_qty    = isset( $child_item['quantity'] ) ? absint( $child_item['quantity'] ) : 1;
+		$child_type = ! empty( $child_item['cmbwc_child_item']['child_type'] ) ? $child_item['cmbwc_child_item']['child_type'] : 'addon';
+		$target_qty = isset( $child_item['quantity'] ) ? absint( $child_item['quantity'] ) : 1;
 
-		if ( $follow_covers ) {
-			$target_qty = $parent_qty;
-		} elseif ( 'service' === $child_type ) {
-			$target_qty = 1;
+		if ( 'service' === $child_type ) {
+			$service_data = cmbwc_get_child_service_data_from_cart_item( $child_item );
+			$target_qty   = cmbwc_get_service_cart_qty( $service_data, $parent_qty );
+		} else {
+			$follow_covers = ! empty( $child_item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $child_item['cmbwc_child_item']['follow_covers'];
+
+			if ( $follow_covers ) {
+				$target_qty = $parent_qty;
+			}
 		}
 
 		$target_qty = max( 1, absint( $target_qty ) );
@@ -577,8 +581,8 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 		$linked_product_id = ! empty( $service_data['linked_product_id'] ) ? absint( $service_data['linked_product_id'] ) : 0;
 
 		if ( $linked_product_id ) {
-			$service_qty    = cmbwc_get_service_cart_qty( $service_data, $covers );
-			$follow_covers  = cmbwc_service_should_follow_covers( $service_data ) ? 'yes' : 'no';
+			$service_qty   = cmbwc_get_service_cart_qty( $service_data, $covers );
+			$follow_covers = cmbwc_service_should_follow_covers( $service_data ) ? 'yes' : 'no';
 
 			WC()->cart->add_to_cart(
 				$linked_product_id,
@@ -628,10 +632,11 @@ function cmbwc_before_calculate_totals( $cart ) {
 		}
 
 		if ( cmbwc_is_child_cart_item( $cart_item ) && ! empty( $cart_item['cmbwc_child_item']['child_type'] ) && 'service' === $cart_item['cmbwc_child_item']['child_type'] ) {
-			$follow_covers = ! empty( $cart_item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $cart_item['cmbwc_child_item']['follow_covers'];
+			$service_data = cmbwc_get_child_service_data_from_cart_item( $cart_item );
+			$target_qty   = cmbwc_get_service_cart_qty( $service_data, cmbwc_get_parent_qty_from_group_id( $cart_item['cmbwc_child_item']['group_id'] ) );
 
-			if ( ! $follow_covers && (int) $cart_item['quantity'] !== 1 ) {
-				$cart->cart_contents[ $cart_item_key ]['quantity'] = 1;
+			if ( (int) $cart_item['quantity'] !== $target_qty ) {
+				$cart->cart_contents[ $cart_item_key ]['quantity'] = $target_qty;
 			}
 		}
 
@@ -662,15 +667,18 @@ function cmbwc_after_cart_item_quantity_update( $cart_item_key, $quantity, $old_
 
 	if ( cmbwc_is_child_cart_item( $item ) ) {
 		$group_id   = ! empty( $item['cmbwc_child_item']['group_id'] ) ? $item['cmbwc_child_item']['group_id'] : '';
-		$follow     = ! empty( $item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $item['cmbwc_child_item']['follow_covers'];
 		$child_type = ! empty( $item['cmbwc_child_item']['child_type'] ) ? $item['cmbwc_child_item']['child_type'] : 'addon';
-		$parent_qty = cmbwc_get_parent_qty_from_group_id( $group_id );
 		$target_qty = max( 1, absint( $quantity ) );
 
-		if ( $follow ) {
-			$target_qty = $parent_qty;
-		} elseif ( 'service' === $child_type ) {
-			$target_qty = 1;
+		if ( 'service' === $child_type ) {
+			$service_data = cmbwc_get_child_service_data_from_cart_item( $item );
+			$target_qty   = cmbwc_get_service_cart_qty( $service_data, cmbwc_get_parent_qty_from_group_id( $group_id ) );
+		} else {
+			$follow = ! empty( $item['cmbwc_child_item']['follow_covers'] ) && 'yes' === $item['cmbwc_child_item']['follow_covers'];
+
+			if ( $follow ) {
+				$target_qty = cmbwc_get_parent_qty_from_group_id( $group_id );
+			}
 		}
 
 		if ( $target_qty !== (int) $quantity ) {
@@ -686,7 +694,8 @@ function cmbwc_lock_service_cart_quantity( $product_quantity, $cart_item_key, $c
 		return $product_quantity;
 	}
 
-	$qty = isset( $cart_item['quantity'] ) ? absint( $cart_item['quantity'] ) : 1;
+	$service_data = cmbwc_get_child_service_data_from_cart_item( $cart_item );
+	$qty          = cmbwc_get_service_cart_qty( $service_data, cmbwc_get_parent_qty_from_group_id( $cart_item['cmbwc_child_item']['group_id'] ) );
 
 	return '<span class="cmbwc-locked-service-qty">' . esc_html( $qty ) . '</span>';
 }
