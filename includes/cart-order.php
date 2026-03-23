@@ -107,8 +107,8 @@ function cmbwc_target_service_qty( $cart_item ) {
 		return 1;
 	}
 
-	$group_id    = ! empty( $cart_item['cmbwc_child_item']['group_id'] ) ? $cart_item['cmbwc_child_item']['group_id'] : '';
-	$parent_qty  = cmbwc_get_parent_qty_from_group_id( $group_id );
+	$group_id   = ! empty( $cart_item['cmbwc_child_item']['group_id'] ) ? $cart_item['cmbwc_child_item']['group_id'] : '';
+	$parent_qty = cmbwc_get_parent_qty_from_group_id( $group_id );
 
 	return cmbwc_child_service_locked_qty( $cart_item, $parent_qty );
 }
