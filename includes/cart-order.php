@@ -370,8 +370,6 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 add_filter( 'woocommerce_get_item_data', 'cmbwc_render_item_data', 10, 2 );
 
 function cmbwc_render_item_data( $item_data, $cart_item ) {
-	// Undgå dobbelt-visning i kurv/minicart.
-	// Vi renderer info via cart_item_name/widget_cart_item_name i stedet.
 	if ( ! empty( $cart_item['cmbwc_data'] ) && is_array( $cart_item['cmbwc_data'] ) ) {
 		return array();
 	}
@@ -754,8 +752,10 @@ function cmbwc_restore_service_if_removed_directly( $cart_item_key, $cart ) {
 
 	$group_id = ! empty( $removed['cmbwc_child_item']['group_id'] ) ? $removed['cmbwc_child_item']['group_id'] : '';
 
-	// Gendan kun service, hvis parent-menuen stadig findes i kurven.
-	// Hvis parent-menuen er slettet, skal service IKKE gendannes.
+	if ( ! empty( $GLOBALS['cmbwc_skip_service_restore_groups'] ) && in_array( $group_id, (array) $GLOBALS['cmbwc_skip_service_restore_groups'], true ) ) {
+		return;
+	}
+
 	if ( ! cmbwc_group_parent_exists_in_cart( $group_id ) ) {
 		return;
 	}
@@ -791,6 +791,14 @@ function cmbwc_remove_child_lines_with_parent( $cart_item_key, $cart ) {
 
 	$group_id = $removed['cmbwc_data']['group_id'];
 
+	if ( empty( $GLOBALS['cmbwc_skip_service_restore_groups'] ) || ! is_array( $GLOBALS['cmbwc_skip_service_restore_groups'] ) ) {
+		$GLOBALS['cmbwc_skip_service_restore_groups'] = array();
+	}
+
+	if ( ! in_array( $group_id, $GLOBALS['cmbwc_skip_service_restore_groups'], true ) ) {
+		$GLOBALS['cmbwc_skip_service_restore_groups'][] = $group_id;
+	}
+
 	foreach ( $cart->get_cart() as $child_key => $child_item ) {
 		if ( empty( $child_item['cmbwc_child_item']['group_id'] ) ) {
 			continue;
@@ -801,6 +809,31 @@ function cmbwc_remove_child_lines_with_parent( $cart_item_key, $cart ) {
 		}
 
 		$cart->remove_cart_item( $child_key );
+	}
+
+	$GLOBALS['cmbwc_skip_service_restore_groups'] = array_values(
+		array_diff( $GLOBALS['cmbwc_skip_service_restore_groups'], array( $group_id ) )
+	);
+}
+
+add_action( 'woocommerce_before_cart', 'cmbwc_cleanup_orphan_service_lines' );
+add_action( 'woocommerce_before_mini_cart', 'cmbwc_cleanup_orphan_service_lines' );
+
+function cmbwc_cleanup_orphan_service_lines() {
+	if ( empty( WC()->cart ) ) {
+		return;
+	}
+
+	foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+		if ( empty( $cart_item['cmbwc_child_item']['child_type'] ) || 'service' !== $cart_item['cmbwc_child_item']['child_type'] ) {
+			continue;
+		}
+
+		$group_id = ! empty( $cart_item['cmbwc_child_item']['group_id'] ) ? $cart_item['cmbwc_child_item']['group_id'] : '';
+
+		if ( ! cmbwc_group_parent_exists_in_cart( $group_id ) ) {
+			WC()->cart->remove_cart_item( $cart_item_key );
+		}
 	}
 }
 
