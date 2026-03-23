@@ -22,6 +22,13 @@ function cmbwc_debug_log( $label, $value = null ) {
 	error_log( 'CMBWC ' . $label . '=' . (string) $value );
 }
 
+function cmbwc_is_menu_request( $product_id ) {
+	$is_menu_product = 'yes' === get_post_meta( $product_id, '_cmbwc_is_menu', true );
+	$has_menu_request = isset( $_POST['cmbwc_covers'] ) || isset( $_POST['cmbwc_selected_addons'] ) || isset( $_POST['cmbwc_selected_service'] );
+
+	return $is_menu_product || $has_menu_request;
+}
+
 function cmbwc_get_included_names_for_product( $product_id ) {
 	$included_products = get_post_meta( $product_id, '_cmbwc_included_products', true );
 
@@ -217,7 +224,7 @@ function cmbwc_sync_child_lines_for_group( $group_id, $parent_qty ) {
 add_filter( 'woocommerce_add_to_cart_validation', 'cmbwc_validate_add_to_cart', 10, 3 );
 
 function cmbwc_validate_add_to_cart( $passed, $product_id, $quantity ) {
-	if ( 'yes' !== get_post_meta( $product_id, '_cmbwc_is_menu', true ) ) {
+	if ( ! cmbwc_is_menu_request( $product_id ) ) {
 		return $passed;
 	}
 
@@ -287,10 +294,19 @@ function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id )
 		return $cart_item_data;
 	}
 
-	if ( 'yes' !== get_post_meta( $product_id, '_cmbwc_is_menu', true ) ) {
+	if ( ! cmbwc_is_menu_request( $product_id ) ) {
 		cmbwc_debug_log( 'add_cart_item_data non-menu product', $product_id );
 		return $cart_item_data;
 	}
+
+	cmbwc_debug_log(
+		'add_cart_item_data menu detection',
+		array(
+			'product_id'       => $product_id,
+			'is_menu_product'  => 'yes' === get_post_meta( $product_id, '_cmbwc_is_menu', true ) ? 'yes' : 'no',
+			'has_menu_request' => ( isset( $_POST['cmbwc_covers'] ) || isset( $_POST['cmbwc_selected_addons'] ) || isset( $_POST['cmbwc_selected_service'] ) ) ? 'yes' : 'no',
+		)
+	);
 
 	$covers         = isset( $_POST['cmbwc_covers'] ) ? absint( wp_unslash( $_POST['cmbwc_covers'] ) ) : 1;
 	$minimum_covers = (int) get_post_meta( $product_id, '_cmbwc_minimum_covers', true );
@@ -614,10 +630,10 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 	cmbwc_debug_log(
 		'expand_menu_to_cart_lines START',
 		array(
-			'cart_item_key'   => $cart_item_key,
-			'product_id'      => $product_id,
-			'quantity'        => $quantity,
-			'cart_item_data'  => $cart_item_data,
+			'cart_item_key'  => $cart_item_key,
+			'product_id'     => $product_id,
+			'quantity'       => $quantity,
+			'cart_item_data' => $cart_item_data,
 		)
 	);
 
@@ -654,10 +670,10 @@ function cmbwc_expand_menu_to_cart_lines( $cart_item_key, $product_id, $quantity
 			cmbwc_debug_log(
 				'adding addon child',
 				array(
-					'group_id'          => $group_id,
-					'addon_product_id'  => $addon_product_id,
-					'addon_qty'         => $addon_qty,
-					'follow_covers'     => ! empty( $addon['follow_covers'] ) ? $addon['follow_covers'] : 'no',
+					'group_id'         => $group_id,
+					'addon_product_id' => $addon_product_id,
+					'addon_qty'        => $addon_qty,
+					'follow_covers'    => ! empty( $addon['follow_covers'] ) ? $addon['follow_covers'] : 'no',
 				)
 			);
 
