@@ -446,34 +446,6 @@ function cmbwc_get_cart_meta_html( $data ) {
 	return ob_get_clean();
 }
 
-function cmbwc_get_child_cart_meta_html( $child ) {
-	$child_type = ! empty( $child['display_type_label'] )
-		? sanitize_text_field( $child['display_type_label'] )
-		: cmbwc_get_child_type_label( isset( $child['child_type'] ) ? $child['child_type'] : '' );
-
-	$parent_name = ! empty( $child['parent_name'] ) ? sanitize_text_field( $child['parent_name'] ) : '';
-
-	ob_start();
-	?>
-	<div class="cmbwc-cart-meta cmbwc-cart-meta-child">
-		<?php if ( '' !== $child_type ) : ?>
-			<div class="cmbwc-cart-row">
-				<span class="cmbwc-cart-label">Type:</span>
-				<span class="cmbwc-cart-value"><?php echo esc_html( $child_type ); ?></span>
-			</div>
-		<?php endif; ?>
-
-		<?php if ( '' !== $parent_name ) : ?>
-			<div class="cmbwc-cart-row">
-				<span class="cmbwc-cart-label">Hører til:</span>
-				<span class="cmbwc-cart-value"><?php echo esc_html( $parent_name ); ?></span>
-			</div>
-		<?php endif; ?>
-	</div>
-	<?php
-	return ob_get_clean();
-}
-
 add_filter( 'woocommerce_cart_item_name', 'cmbwc_render_cart_item_name_block', 20, 3 );
 
 function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
@@ -481,8 +453,9 @@ function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_ite
 		return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
 	}
 
+	// Child-linjer skal kun vise navn.
 	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
-		return $product_name . cmbwc_get_child_cart_meta_html( $cart_item['cmbwc_child_item'] );
+		return $product_name;
 	}
 
 	return $product_name;
@@ -496,7 +469,7 @@ function cmbwc_render_widget_cart_item_name_block( $product_name, $cart_item, $c
 	}
 
 	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
-		return $product_name . cmbwc_get_child_cart_meta_html( $cart_item['cmbwc_child_item'] );
+		return $product_name;
 	}
 
 	return $product_name;
@@ -837,6 +810,20 @@ function cmbwc_cleanup_orphan_service_lines() {
 	}
 }
 
+add_filter( 'woocommerce_checkout_cart_item_quantity', 'cmbwc_clean_checkout_quantity_display', 20, 3 );
+
+function cmbwc_clean_checkout_quantity_display( $quantity_html, $cart_item, $cart_item_key ) {
+	if ( ! empty( $cart_item['cmbwc_data'] ) && is_array( $cart_item['cmbwc_data'] ) ) {
+		return '';
+	}
+
+	if ( ! empty( $cart_item['cmbwc_child_item'] ) && is_array( $cart_item['cmbwc_child_item'] ) ) {
+		return '';
+	}
+
+	return $quantity_html;
+}
+
 add_action( 'woocommerce_checkout_create_order_line_item', 'cmbwc_add_order_item_meta', 10, 4 );
 
 function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
@@ -882,18 +869,6 @@ function cmbwc_add_order_item_meta( $item, $cart_item_key, $values, $order ) {
 
 	if ( cmbwc_is_child_cart_item( $values ) ) {
 		$child = $values['cmbwc_child_item'];
-
-		$child_type_label = ! empty( $child['display_type_label'] )
-			? sanitize_text_field( $child['display_type_label'] )
-			: cmbwc_get_child_type_label( isset( $child['child_type'] ) ? $child['child_type'] : '' );
-
-		if ( ! empty( $child_type_label ) ) {
-			$item->add_meta_data( 'Type', $child_type_label );
-		}
-
-		if ( ! empty( $child['parent_name'] ) ) {
-			$item->add_meta_data( 'Hører til', sanitize_text_field( $child['parent_name'] ) );
-		}
 
 		if ( ! empty( $child['child_type'] ) ) {
 			$item->add_meta_data( '_cmbwc_child_type', sanitize_text_field( $child['child_type'] ) );
