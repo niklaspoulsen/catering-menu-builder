@@ -446,15 +446,7 @@ function cmbwc_get_cart_item_from_session( $cart_item, $values, $key ) {
 add_filter( 'woocommerce_get_item_data', 'cmbwc_render_item_data', 10, 2 );
 
 function cmbwc_render_item_data( $item_data, $cart_item ) {
-	if ( ! empty( $cart_item['cmbwc_data'] ) && is_array( $cart_item['cmbwc_data'] ) ) {
-		return array();
-	}
-
-	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
-		return array();
-	}
-
-	return $item_data;
+	return array();
 }
 
 function cmbwc_get_cart_meta_html( $data ) {
@@ -529,10 +521,6 @@ function cmbwc_render_cart_item_name_block( $product_name, $cart_item, $cart_ite
 		return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
 	}
 
-	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
-		return $product_name;
-	}
-
 	return $product_name;
 }
 
@@ -541,10 +529,6 @@ add_filter( 'widget_cart_item_name', 'cmbwc_render_widget_cart_item_name_block',
 function cmbwc_render_widget_cart_item_name_block( $product_name, $cart_item, $cart_item_key ) {
 	if ( ! empty( $cart_item['cmbwc_data'] ) && is_array( $cart_item['cmbwc_data'] ) ) {
 		return $product_name . cmbwc_get_cart_meta_html( $cart_item['cmbwc_data'] );
-	}
-
-	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
-		return $product_name;
 	}
 
 	return $product_name;
@@ -828,6 +812,10 @@ function cmbwc_disable_service_remove_link_in_widget_markup( $html, $cart_item, 
 add_filter( 'woocommerce_cart_item_class', 'cmbwc_add_service_item_class', 20, 3 );
 
 function cmbwc_add_service_item_class( $class, $cart_item, $cart_item_key ) {
+	if ( cmbwc_is_child_cart_item( $cart_item ) ) {
+		$class .= ' cmbwc-child-line';
+	}
+
 	if ( cmbwc_is_child_service_item( $cart_item ) ) {
 		$class .= ' cmbwc-service-line';
 	}
@@ -963,6 +951,27 @@ function cmbwc_clean_checkout_quantity_display( $quantity_html, $cart_item, $car
 	}
 
 	return $quantity_html;
+}
+
+add_action( 'wp_head', 'cmbwc_hide_child_item_meta_css', 99 );
+
+function cmbwc_hide_child_item_meta_css() {
+	?>
+	<style>
+		.cmbwc-child-line .wc-item-meta,
+		.cmbwc-child-line dl.variation,
+		.cmbwc-child-line .variation,
+		.cmbwc-child-line .product-quantity,
+		.cmbwc-child-line .quantity:not(.cmbwc-locked-service-qty),
+		.woocommerce-mini-cart-item.cmbwc-child-line .wc-item-meta,
+		.woocommerce-mini-cart-item.cmbwc-child-line dl.variation,
+		.woocommerce-mini-cart-item.cmbwc-child-line .variation,
+		.woocommerce-mini-cart-item.cmbwc-child-line .product-quantity,
+		.woocommerce-mini-cart-item.cmbwc-child-line .quantity:not(.cmbwc-locked-service-qty) {
+			display: none !important;
+		}
+	</style>
+	<?php
 }
 
 add_action( 'woocommerce_checkout_create_order_line_item', 'cmbwc_add_order_item_meta', 10, 4 );
