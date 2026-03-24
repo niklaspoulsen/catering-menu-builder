@@ -426,6 +426,9 @@ function cmbwc_hide_internal_order_item_meta( $hidden ) {
 	$hidden[] = '_cmbwc_service_price';
 	$hidden[] = '_cmbwc_service_price_type';
 	$hidden[] = '_cmbwc_service_is_deposit';
+	$hidden[] = '_cmbwc_group_id';
+	$hidden[] = '_cmbwc_child_type';
+	$hidden[] = '_line_discount';
 
 	return array_unique( $hidden );
 }
