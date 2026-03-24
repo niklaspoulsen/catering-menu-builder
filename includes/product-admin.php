@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Helpers
  */
-function cmbwc_get_public_products_grouped_by_category() {
+function cmbwc_get_public_products_grouped_by_category( $exclude_product_id = 0 ) {
 	$products = get_posts(
 		array(
 			'post_type'      => 'product',
@@ -22,6 +22,10 @@ function cmbwc_get_public_products_grouped_by_category() {
 	$grouped = array();
 
 	foreach ( $products as $product_id ) {
+		if ( $exclude_product_id && (int) $product_id === (int) $exclude_product_id ) {
+			continue;
+		}
+
 		$terms = get_the_terms( $product_id, 'product_cat' );
 
 		if ( is_wp_error( $terms ) || empty( $terms ) ) {
@@ -37,13 +41,14 @@ function cmbwc_get_public_products_grouped_by_category() {
 
 			$slug = isset( $term->slug ) ? (string) $term->slug : '';
 			$name = isset( $term->name ) ? trim( (string) $term->name ) : '';
+			$name_lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( $name ) : strtolower( $name );
 
 			$is_uncategorized = in_array(
 				$slug,
 				array( 'uncategorized', 'ukategoriseret' ),
 				true
 			) || in_array(
-				mb_strtolower( $name ),
+				$name_lower,
 				array( 'uncategorized', 'ukategoriseret', 'uden kategori' ),
 				true
 			);
@@ -85,7 +90,7 @@ function cmbwc_render_product_picker_group( $title, $product_ids, $selected_ids,
 		return;
 	}
 	?>
-	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:10px; background:#fff; overflow:hidden;">
+	<div style="margin-bottom:18px; border:1px solid #ddd; border-radius:10px; background:#fff; overflow:hidden;">
 		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:600; background:#fafafa;">
 			<?php echo esc_html( $title ); ?>
 		</div>
@@ -117,7 +122,7 @@ function cmbwc_render_addon_group( $title, $product_ids, $menu_addons ) {
 		return;
 	}
 	?>
-	<div style="margin-bottom:20px; border:1px solid #d9d9d9; border-radius:10px; background:#fff; overflow:hidden;">
+	<div style="margin-bottom:18px; border:1px solid #d9d9d9; border-radius:10px; background:#fff; overflow:hidden;">
 		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; background:#f8f8f8;">
 			<?php echo esc_html( $title ); ?>
 		</div>
@@ -166,6 +171,29 @@ function cmbwc_render_addon_group( $title, $product_ids, $menu_addons ) {
 			<?php endforeach; ?>
 		</div>
 	</div>
+	<?php
+}
+
+function cmbwc_render_section_start( $title, $count = 0, $description = '', $open = false, $accent = '#dfe3e8', $bg = '#ffffff' ) {
+	$title_with_count = $title . ' (' . (int) $count . ' valgt)';
+	?>
+	<details <?php echo $open ? 'open' : ''; ?> style="margin:0 0 18px; border:1px solid <?php echo esc_attr( $accent ); ?>; border-radius:12px; background:<?php echo esc_attr( $bg ); ?>; overflow:hidden;">
+		<summary style="cursor:pointer; list-style:none; padding:16px 18px; font-size:18px; font-weight:700; border-bottom:1px solid <?php echo esc_attr( $accent ); ?>; background:#f9fafb;">
+			<?php echo esc_html( $title_with_count ); ?>
+		</summary>
+		<div style="padding:18px;">
+			<?php if ( $description ) : ?>
+				<div style="padding:14px 16px; margin:0 0 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; color:#334155;">
+					<?php echo wp_kses_post( $description ); ?>
+				</div>
+			<?php endif; ?>
+	<?php
+}
+
+function cmbwc_render_section_end() {
+	?>
+		</div>
+	</details>
 	<?php
 }
 
@@ -241,8 +269,12 @@ function cmbwc_render_product_metabox( $post ) {
 		$cover_step = 1;
 	}
 
-	$grouped_products = cmbwc_get_public_products_grouped_by_category();
+	$grouped_products = cmbwc_get_public_products_grouped_by_category( $product_id );
 	$service_options  = function_exists( 'cmbwc_get_service_options' ) ? cmbwc_get_service_options() : array();
+
+	$included_count = count( $included_products );
+	$addon_count    = count( $menu_addons );
+	$service_count  = count( $service_allowed );
 
 	wp_nonce_field( 'cmbwc_save_metabox', 'cmbwc_metabox_nonce' );
 	?>
@@ -271,42 +303,64 @@ function cmbwc_render_product_metabox( $post ) {
 			</p>
 		</div>
 
-		<div style="margin:28px 0 0;">
-			<h2 style="margin:0 0 12px;">Retter i menuen</h2>
-			<div style="padding:14px 16px; margin:0 0 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; color:#334155;">
-				Vælg her de produkter, som skal indgå som faste retter i menuen.
+		<?php
+		cmbwc_render_section_start(
+			'Retter i menuen',
+			$included_count,
+			'Vælg her de produkter, som skal indgå som <strong>faste retter i menuen</strong>.',
+			true,
+			'#e2e8f0',
+			'#ffffff'
+		);
+		?>
+
+		<?php if ( ! empty( $grouped_products ) ) : ?>
+			<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
+				<?php cmbwc_render_product_picker_group( $category_name, $product_ids, $included_products, '_cmbwc_included_products' ); ?>
+			<?php endforeach; ?>
+		<?php else : ?>
+			<div style="padding:14px 16px; background:#fff; border:1px solid #ddd; border-radius:10px;">
+				Ingen kategoriserede produkter fundet. Produkter i “Ukategoriseret” vises ikke her.
 			</div>
+		<?php endif; ?>
 
-			<?php if ( ! empty( $grouped_products ) ) : ?>
-				<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
-					<?php cmbwc_render_product_picker_group( $category_name, $product_ids, $included_products, '_cmbwc_included_products' ); ?>
-				<?php endforeach; ?>
-			<?php else : ?>
-				<div style="padding:14px 16px; background:#fff; border:1px solid #ddd; border-radius:10px;">
-					Ingen kategoriserede produkter fundet. Produkter i “Ukategoriseret” vises ikke her.
-				</div>
-			<?php endif; ?>
-		</div>
+		<?php cmbwc_render_section_end(); ?>
 
-		<div style="margin:36px 0 0; padding:18px; border:2px solid #d6d3d1; border-radius:12px; background:#fcfcfc;">
-			<h2 style="margin:0 0 10px;">Mulige tilvalg</h2>
-			<div style="padding:14px 16px; margin:0 0 16px; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; color:#9a3412;">
-				Vælg her produkter, som <strong>kan tilkøbes som tilvalg</strong>. Disse er ikke en del af selve menuen, medmindre kunden aktivt vælger dem.
+		<?php
+		cmbwc_render_section_start(
+			'Mulige tilvalg',
+			$addon_count,
+			'Vælg her produkter, som <strong>kan tilkøbes som tilvalg</strong>. Disse er ikke en del af selve menuen, medmindre kunden aktivt vælger dem.',
+			false,
+			'#fed7aa',
+			'#fffbf5'
+		);
+		?>
+
+		<?php if ( ! empty( $grouped_products ) ) : ?>
+			<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
+				<?php cmbwc_render_addon_group( $category_name, $product_ids, $menu_addons ); ?>
+			<?php endforeach; ?>
+		<?php else : ?>
+			<div style="padding:14px 16px; background:#fff; border:1px solid #ddd; border-radius:10px;">
+				Ingen kategoriserede produkter fundet til tilvalg.
 			</div>
+		<?php endif; ?>
 
-			<?php if ( ! empty( $grouped_products ) ) : ?>
-				<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
-					<?php cmbwc_render_addon_group( $category_name, $product_ids, $menu_addons ); ?>
-				<?php endforeach; ?>
-			<?php else : ?>
-				<div style="padding:14px 16px; background:#fff; border:1px solid #ddd; border-radius:10px;">
-					Ingen kategoriserede produkter fundet til tilvalg.
-				</div>
-			<?php endif; ?>
-		</div>
+		<?php cmbwc_render_section_end(); ?>
 
-		<h2 style="margin:32px 0 12px;">Service / anretning</h2>
-		<div style="border:1px solid #ddd; border-radius:8px; background:#fff; padding:14px;">
+		<?php
+		cmbwc_render_section_start(
+			'Service / anretning',
+			$service_count,
+			'Vælg hvilke servicevalg og anretninger der må kunne bruges sammen med denne menu.',
+			false,
+			'#d6d3d1',
+			'#fcfcfc'
+		);
+		?>
+
+		<div style="border:1px solid #ddd; border-radius:10px; background:#fff; padding:14px;">
 			<?php if ( ! empty( $service_options ) ) : ?>
 				<?php foreach ( $service_options as $service_key => $service_data ) : ?>
 					<?php
@@ -342,6 +396,8 @@ function cmbwc_render_product_metabox( $post ) {
 				<p>Ingen servicevalg fundet endnu. Opret dem under Catering → Servicevalg.</p>
 			<?php endif; ?>
 		</div>
+
+		<?php cmbwc_render_section_end(); ?>
 	</div>
 	<?php
 }
