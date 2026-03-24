@@ -25,11 +25,48 @@ function cmbwc_get_public_products_grouped_by_category() {
 		$terms = get_the_terms( $product_id, 'product_cat' );
 
 		if ( is_wp_error( $terms ) || empty( $terms ) ) {
-			$grouped['Uden kategori'][] = $product_id;
 			continue;
 		}
 
-		$primary_name = $terms[0]->name;
+		$valid_terms = array();
+
+		foreach ( $terms as $term ) {
+			if ( ! $term || empty( $term->term_id ) ) {
+				continue;
+			}
+
+			$slug = isset( $term->slug ) ? (string) $term->slug : '';
+			$name = isset( $term->name ) ? trim( (string) $term->name ) : '';
+
+			$is_uncategorized = in_array(
+				$slug,
+				array( 'uncategorized', 'ukategoriseret' ),
+				true
+			) || in_array(
+				mb_strtolower( $name ),
+				array( 'uncategorized', 'ukategoriseret', 'uden kategori' ),
+				true
+			);
+
+			if ( $is_uncategorized ) {
+				continue;
+			}
+
+			$valid_terms[] = $term;
+		}
+
+		if ( empty( $valid_terms ) ) {
+			continue;
+		}
+
+		usort(
+			$valid_terms,
+			function( $a, $b ) {
+				return (int) $a->term_id <=> (int) $b->term_id;
+			}
+		);
+
+		$primary_name = $valid_terms[0]->name;
 
 		if ( ! isset( $grouped[ $primary_name ] ) ) {
 			$grouped[ $primary_name ] = array();
@@ -38,15 +75,18 @@ function cmbwc_get_public_products_grouped_by_category() {
 		$grouped[ $primary_name ][] = $product_id;
 	}
 
-	ksort( $grouped );
+	ksort( $grouped, SORT_NATURAL | SORT_FLAG_CASE );
 
 	return $grouped;
 }
 
 function cmbwc_render_product_picker_group( $title, $product_ids, $selected_ids, $field_name ) {
+	if ( empty( $product_ids ) ) {
+		return;
+	}
 	?>
-	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:8px; background:#fff;">
-		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:600;">
+	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:10px; background:#fff; overflow:hidden;">
+		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:600; background:#fafafa;">
 			<?php echo esc_html( $title ); ?>
 		</div>
 		<div style="padding:12px 14px;">
@@ -57,7 +97,7 @@ function cmbwc_render_product_picker_group( $title, $product_ids, $selected_ids,
 					continue;
 				}
 				?>
-				<label style="display:block; margin:0 0 8px;">
+				<label style="display:block; margin:0 0 10px;">
 					<input
 						type="checkbox"
 						name="<?php echo esc_attr( $field_name ); ?>[]"
@@ -73,9 +113,12 @@ function cmbwc_render_product_picker_group( $title, $product_ids, $selected_ids,
 }
 
 function cmbwc_render_addon_group( $title, $product_ids, $menu_addons ) {
+	if ( empty( $product_ids ) ) {
+		return;
+	}
 	?>
-	<div style="margin-bottom:20px; border:1px solid #ddd; border-radius:8px; background:#fff;">
-		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:600;">
+	<div style="margin-bottom:20px; border:1px solid #d9d9d9; border-radius:10px; background:#fff; overflow:hidden;">
+		<div style="padding:12px 14px; border-bottom:1px solid #eee; font-weight:700; background:#f8f8f8;">
 			<?php echo esc_html( $title ); ?>
 		</div>
 		<div style="padding:12px 14px;">
@@ -96,8 +139,8 @@ function cmbwc_render_addon_group( $title, $product_ids, $menu_addons ) {
 				$enabled       = isset( $addon_settings['enabled'] ) ? $addon_settings['enabled'] : 'no';
 				$follow_covers = isset( $addon_settings['follow_covers'] ) ? $addon_settings['follow_covers'] : 'yes';
 				?>
-				<div style="padding:10px 0; border-bottom:1px dashed #eee;">
-					<label style="display:block; margin-bottom:6px;">
+				<div style="padding:12px 0; border-bottom:1px dashed #e5e5e5;">
+					<label style="display:block; margin-bottom:6px; font-weight:500;">
 						<input
 							type="checkbox"
 							name="_cmbwc_menu_addons[<?php echo esc_attr( $product_id ); ?>][enabled]"
@@ -110,7 +153,7 @@ function cmbwc_render_addon_group( $title, $product_ids, $menu_addons ) {
 						<?php endif; ?>
 					</label>
 
-					<label style="display:block; margin-left:22px;">
+					<label style="display:block; margin-left:22px; color:#555;">
 						<input
 							type="checkbox"
 							name="_cmbwc_menu_addons[<?php echo esc_attr( $product_id ); ?>][follow_covers]"
@@ -228,15 +271,39 @@ function cmbwc_render_product_metabox( $post ) {
 			</p>
 		</div>
 
-		<h2 style="margin:24px 0 12px;">Retter i menuen</h2>
-		<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
-			<?php cmbwc_render_product_picker_group( $category_name, $product_ids, $included_products, '_cmbwc_included_products' ); ?>
-		<?php endforeach; ?>
+		<div style="margin:28px 0 0;">
+			<h2 style="margin:0 0 12px;">Retter i menuen</h2>
+			<div style="padding:14px 16px; margin:0 0 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; color:#334155;">
+				Vælg her de produkter, som skal indgå som faste retter i menuen.
+			</div>
 
-		<h2 style="margin:32px 0 12px;">Mulige tilvalg</h2>
-		<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
-			<?php cmbwc_render_addon_group( $category_name, $product_ids, $menu_addons ); ?>
-		<?php endforeach; ?>
+			<?php if ( ! empty( $grouped_products ) ) : ?>
+				<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
+					<?php cmbwc_render_product_picker_group( $category_name, $product_ids, $included_products, '_cmbwc_included_products' ); ?>
+				<?php endforeach; ?>
+			<?php else : ?>
+				<div style="padding:14px 16px; background:#fff; border:1px solid #ddd; border-radius:10px;">
+					Ingen kategoriserede produkter fundet. Produkter i “Ukategoriseret” vises ikke her.
+				</div>
+			<?php endif; ?>
+		</div>
+
+		<div style="margin:36px 0 0; padding:18px; border:2px solid #d6d3d1; border-radius:12px; background:#fcfcfc;">
+			<h2 style="margin:0 0 10px;">Mulige tilvalg</h2>
+			<div style="padding:14px 16px; margin:0 0 16px; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; color:#9a3412;">
+				Vælg her produkter, som <strong>kan tilkøbes som tilvalg</strong>. Disse er ikke en del af selve menuen, medmindre kunden aktivt vælger dem.
+			</div>
+
+			<?php if ( ! empty( $grouped_products ) ) : ?>
+				<?php foreach ( $grouped_products as $category_name => $product_ids ) : ?>
+					<?php cmbwc_render_addon_group( $category_name, $product_ids, $menu_addons ); ?>
+				<?php endforeach; ?>
+			<?php else : ?>
+				<div style="padding:14px 16px; background:#fff; border:1px solid #ddd; border-radius:10px;">
+					Ingen kategoriserede produkter fundet til tilvalg.
+				</div>
+			<?php endif; ?>
+		</div>
 
 		<h2 style="margin:32px 0 12px;">Service / anretning</h2>
 		<div style="border:1px solid #ddd; border-radius:8px; background:#fff; padding:14px;">
