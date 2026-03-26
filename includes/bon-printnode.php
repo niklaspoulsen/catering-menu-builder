@@ -219,6 +219,54 @@ function cmbwc_mark_order_bon_printed( $order_id ) {
 	update_post_meta( $order_id, '_cmbwc_bon_printed_at', current_time( 'mysql' ) );
 }
 
+/**
+ * Midlertidig print-lås, så samme ordre ikke sendes dobbelt lige efter hinanden.
+ */
+function cmbwc_get_printnode_lock_key( $order_id ) {
+	return 'cmbwc_printnode_lock_' . absint( $order_id );
+}
+
+function cmbwc_is_printnode_locked( $order_id ) {
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id ) {
+		return false;
+	}
+
+	$locked_until = (int) get_transient( cmbwc_get_printnode_lock_key( $order_id ) );
+
+	return $locked_until > time();
+}
+
+function cmbwc_acquire_printnode_lock( $order_id, $ttl = 15 ) {
+	$order_id = absint( $order_id );
+	$ttl      = max( 5, absint( $ttl ) );
+
+	if ( ! $order_id ) {
+		return false;
+	}
+
+	if ( cmbwc_is_printnode_locked( $order_id ) ) {
+		return false;
+	}
+
+	$locked_until = time() + $ttl;
+	set_transient( cmbwc_get_printnode_lock_key( $order_id ), $locked_until, $ttl );
+	update_post_meta( $order_id, '_cmbwc_printnode_last_lock', $locked_until );
+
+	return true;
+}
+
+function cmbwc_release_printnode_lock( $order_id ) {
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id ) {
+		return;
+	}
+
+	delete_transient( cmbwc_get_printnode_lock_key( $order_id ) );
+}
+
 function cmbwc_unmark_order_bon_printed( $order_id ) {
 	delete_post_meta( $order_id, '_cmbwc_bon_printed' );
 	delete_post_meta( $order_id, '_cmbwc_bon_printed_at' );
@@ -595,26 +643,30 @@ function cmbwc_send_order_to_printnode( $order_id ) {
 		return false;
 	}
 
+	if ( cmbwc_is_printnode_locked( $order_id ) ) {
+		return false;
+	}
+
+	if ( ! cmbwc_acquire_printnode_lock( $order_id, 15 ) ) {
+		return false;
+	}
+
 	if ( ! cmbwc_can_use_printnode() ) {
+		cmbwc_release_printnode_lock( $order_id );
 		return false;
 	}
 
 	$order = wc_get_order( $order_id );
 
 	if ( ! $order ) {
+		cmbwc_release_printnode_lock( $order_id );
 		return false;
-	}
-
-	global $woocommerce_simba_printorders_printnode;
-
-	// Sørg for at pluginet har registreret sine actions.
-	if ( method_exists( $woocommerce_simba_printorders_printnode, 'register_woocommerce_order_actions' ) ) {
-		$woocommerce_simba_printorders_printnode->register_woocommerce_order_actions();
 	}
 
 	$action_key = cmbwc_get_printnode_internal_action_key();
 
 	if ( '' === $action_key ) {
+		cmbwc_release_printnode_lock( $order_id );
 		return false;
 	}
 
