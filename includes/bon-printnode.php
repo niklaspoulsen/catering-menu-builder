@@ -375,6 +375,21 @@ function cmbwc_get_order_bon_data( $order ) {
 
 	$items         = array();
 	$deposit_items = array();
+	$coupon_lines  = array();
+
+	foreach ( $order->get_items( 'coupon' ) as $coupon_item ) {
+		if ( ! is_a( $coupon_item, 'WC_Order_Item_Coupon' ) ) {
+			continue;
+		}
+
+		$code     = method_exists( $coupon_item, 'get_code' ) ? (string) $coupon_item->get_code() : '';
+		$discount = (float) $coupon_item->get_discount() + (float) $coupon_item->get_discount_tax();
+
+		$coupon_lines[] = array(
+			'code'     => $code,
+			'discount' => $discount,
+		);
+	}
 
 	foreach ( $order->get_items() as $item_id => $item ) {
 		if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
@@ -455,6 +470,7 @@ function cmbwc_get_order_bon_data( $order ) {
 		'total_tax'               => (float) $order->get_total_tax(),
 		'discount_total'          => (float) $order->get_discount_total(),
 		'grand_total'             => (float) $order->get_total(),
+		'coupon_lines'            => $coupon_lines,
 		'items'                   => $items,
 		'deposit_items'           => $deposit_items,
 		'has_deposit'             => ! empty( $deposit_items ),

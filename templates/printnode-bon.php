@@ -236,6 +236,11 @@ body {
 @media print {
 	.print-actions {
 		display: none !important;
+		visibility: hidden !important;
+		height: 0 !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		overflow: hidden !important;
 	}
 }
 </style>
@@ -396,6 +401,22 @@ body {
 						<span><?php echo wp_kses_post( cmbwc_bon_price( $deposit_item['amount'], $order ) ); ?></span>
 					</div>
 				<?php endforeach; ?>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $data['coupon_lines'] ) ) : ?>
+				<?php foreach ( $data['coupon_lines'] as $coupon_line ) : ?>
+					<div class="total-row">
+						<span>
+							Rabatkode<?php echo ! empty( $coupon_line['code'] ) ? ': ' . esc_html( $coupon_line['code'] ) : ''; ?>
+						</span>
+						<span>-<?php echo wp_kses_post( wc_price( (float) $coupon_line['discount'], array( 'currency' => $order->get_currency() ) ) ); ?></span>
+					</div>
+				<?php endforeach; ?>
+			<?php elseif ( ! empty( $data['discount_total'] ) ) : ?>
+				<div class="total-row">
+					<span>Rabat</span>
+					<span>-<?php echo wp_kses_post( wc_price( (float) $data['discount_total'], array( 'currency' => $order->get_currency() ) ) ); ?></span>
+				</div>
 			<?php endif; ?>
 
 			<div class="total-row grand">
