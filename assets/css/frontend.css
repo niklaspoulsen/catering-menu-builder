@@ -453,3 +453,32 @@
 	outline: 2px solid #c6924b;
 	outline-offset: 0;
 }
+
+.wcr-qty-wrap {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  max-width: 240px;
+  gap: 8px;
+}
+
+.wcr-qty-wrap input[type="number"] {
+  flex: 1;
+  text-align: center;
+  min-width: 80px;
+}
+
+.wcr-qty-btn {
+  width: 42px;
+  min-width: 42px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+.wcr-qty-btn:hover {
+  background: #eee;
+}

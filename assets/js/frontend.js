@@ -260,3 +260,67 @@ jQuery(function ($) {
 
 	updateAllBoxes();
 });
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Tilpas selector hvis nødvendigt
+  const qtyInputs = document.querySelectorAll('input[type="number"]');
+
+  qtyInputs.forEach(function (input) {
+    // Markér hele tallet når man klikker/fokuserer i feltet
+    input.addEventListener('focus', function () {
+      setTimeout(() => input.select(), 0);
+    });
+
+    input.addEventListener('click', function () {
+      setTimeout(() => input.select(), 0);
+    });
+
+    // Undgå at markering forsvinder på mus-up
+    input.addEventListener('mouseup', function (e) {
+      e.preventDefault();
+    });
+
+    // Wrap input hvis det ikke allerede er gjort
+    if (input.parentElement.classList.contains('wcr-qty-wrap')) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'wcr-qty-wrap';
+
+    const minusBtn = document.createElement('button');
+    minusBtn.type = 'button';
+    minusBtn.className = 'wcr-qty-btn wcr-qty-minus';
+    minusBtn.textContent = '−';
+
+    const plusBtn = document.createElement('button');
+    plusBtn.type = 'button';
+    plusBtn.className = 'wcr-qty-btn wcr-qty-plus';
+    plusBtn.textContent = '+';
+
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(minusBtn);
+    wrap.appendChild(input);
+    wrap.appendChild(plusBtn);
+
+    const step = parseInt(input.step || 1, 10);
+    const min = input.min !== '' ? parseInt(input.min, 10) : 1;
+    const max = input.max !== '' ? parseInt(input.max, 10) : null;
+
+    minusBtn.addEventListener('click', function () {
+      let value = parseInt(input.value || min, 10);
+      value = isNaN(value) ? min : value - step;
+      if (value < min) value = min;
+      input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    plusBtn.addEventListener('click', function () {
+      let value = parseInt(input.value || min, 10);
+      value = isNaN(value) ? min : value + step;
+      if (max !== null && value > max) value = max;
+      input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+});
