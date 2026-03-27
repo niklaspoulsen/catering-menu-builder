@@ -53,7 +53,8 @@ jQuery(function ($) {
 
 	function normalizeCovers($box) {
 		var $input = $box.find('.cmbwc-covers');
-		var covers = getInt($input.val(), 1);
+		var rawValue = String($input.val() || '').replace(/[^\d]/g, '');
+		var covers = getInt(rawValue, 1);
 		var min = getInt($box.attr('data-minimum-covers'), 1);
 		var step = getInt($box.attr('data-cover-step'), 1);
 
@@ -75,6 +76,22 @@ jQuery(function ($) {
 
 		$input.val(covers);
 		return covers;
+	}
+
+	function normalizeAddonQty($input) {
+		if (!$input.length) {
+			return 1;
+		}
+
+		var rawValue = String($input.val() || '').replace(/[^\d]/g, '');
+		var qty = getInt(rawValue, 1);
+
+		if (qty < 1) {
+			qty = 1;
+		}
+
+		$input.val(qty);
+		return qty;
 	}
 
 	function syncVisualState($box) {
@@ -235,7 +252,15 @@ jQuery(function ($) {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$(document).on('input change', '.cmbwc-addon-qty', function () {
+	// Tillad fri indtastning mens brugeren skriver i addon qty
+	$(document).on('input', '.cmbwc-addon-qty', function () {
+		var value = String($(this).val() || '').replace(/[^\d]/g, '');
+		$(this).val(value);
+	});
+
+	// Håndhæv først minimum når feltet forlades / ændres
+	$(document).on('change blur', '.cmbwc-addon-qty', function () {
+		normalizeAddonQty($(this));
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
@@ -243,7 +268,14 @@ jQuery(function ($) {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$(document).on('input change', '.cmbwc-covers', function () {
+	// Tillad fri indtastning mens brugeren skriver antal kuverter
+	$(document).on('input', '.cmbwc-covers', function () {
+		var value = String($(this).val() || '').replace(/[^\d]/g, '');
+		$(this).val(value);
+	});
+
+	// Håndhæv først minimum når feltet forlades / ændres
+	$(document).on('change blur', '.cmbwc-covers', function () {
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
@@ -262,11 +294,9 @@ jQuery(function ($) {
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-  // Tilpas selector hvis nødvendigt
   const qtyInputs = document.querySelectorAll('input[type="number"]');
 
   qtyInputs.forEach(function (input) {
-    // Markér hele tallet når man klikker/fokuserer i feltet
     input.addEventListener('focus', function () {
       setTimeout(() => input.select(), 0);
     });
@@ -275,12 +305,10 @@ document.addEventListener('DOMContentLoaded', function () {
       setTimeout(() => input.select(), 0);
     });
 
-    // Undgå at markering forsvinder på mus-up
     input.addEventListener('mouseup', function (e) {
       e.preventDefault();
     });
 
-    // Wrap input hvis det ikke allerede er gjort
     if (input.parentElement.classList.contains('wcr-qty-wrap')) return;
 
     const wrap = document.createElement('div');
