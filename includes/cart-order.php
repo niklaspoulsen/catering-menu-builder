@@ -1043,21 +1043,13 @@ function cmbwc_format_order_item_meta_value( $display_value, $meta, $item ) {
 			return $display_value;
 		}
 
-		$html = '<ul class="cmbwc-order-meta-list">';
+		$formatted = array();
 
 		foreach ( $lines as $line ) {
-			$html .= '<li>' . esc_html( $line ) . '</li>';
+			$formatted[] = esc_html( $line );
 		}
 
-		$html .= '</ul>';
-
-		return wp_kses(
-			$html,
-			array(
-				'ul' => array( 'class' => true ),
-				'li' => array(),
-			)
-		);
+		return implode( '<br>', $formatted );
 	}
 
 	return $display_value;
