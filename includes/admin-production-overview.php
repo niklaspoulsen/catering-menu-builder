@@ -395,7 +395,6 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 
 						if ( '' !== $addon_line ) {
 							$addons_output[] = $addon_line;
-
 							$addon_key = function_exists( 'mb_strtolower' ) ? mb_strtolower( $addon_line ) : strtolower( $addon_line );
 							$addon_labels_seen[ $addon_key ] = true;
 						}
@@ -410,7 +409,6 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 
 						if ( '' !== $service_line ) {
 							$service_output[] = $service_line;
-
 							$service_key = function_exists( 'mb_strtolower' ) ? mb_strtolower( $service_line ) : strtolower( $service_line );
 							$service_labels_seen[ $service_key ] = true;
 						}
@@ -451,13 +449,7 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 					$covers_total += $covers;
 				}
 
-				$label = $base_label;
-
-				if ( $covers > 0 ) {
-					$label .= ' (' . $covers . ' kuverter)';
-				}
-
-				$items_output[] = $label;
+				$items_output[] = $base_label;
 			}
 
 			$items_output   = array_values( array_unique( $items_output ) );
@@ -645,21 +637,31 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 					margin: 16px 0 20px;
 				}
 				.cmbwc-status-cell {
-					min-width: 210px;
+					min-width: 185px;
 					position: relative;
 				}
-				.cmbwc-status-badge {
+				.cmbwc-status-toggle {
 					display: inline-flex;
 					align-items: center;
 					gap: 6px;
-					padding: 6px 11px;
+					padding: 6px 12px;
+					border: 0;
 					border-radius: 999px;
 					color: #fff;
 					font-weight: 600;
 					font-size: 13px;
-					line-height: 1;
+					line-height: 1.2;
+					cursor: pointer;
+					box-shadow: none;
 				}
-				.cmbwc-status-badge .dashicons {
+				.cmbwc-status-toggle:hover,
+				.cmbwc-status-toggle:focus {
+					color: #fff;
+					opacity: 0.92;
+					outline: none;
+					box-shadow: none;
+				}
+				.cmbwc-status-toggle .dashicons {
 					font-size: 14px;
 					width: 14px;
 					height: 14px;
@@ -708,21 +710,6 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 					margin-top: 6px;
 					font-size: 11px;
 					color: #646970;
-				}
-				.cmbwc-pill {
-					display: inline-block;
-					padding: 3px 8px;
-					border-radius: 999px;
-					font-size: 12px;
-					font-weight: 600;
-				}
-				.cmbwc-pill-printed {
-					background: #e7f7ed;
-					color: #156b36;
-				}
-				.cmbwc-pill-unprinted {
-					background: #fff4d6;
-					color: #8a5b00;
 				}
 				.cmbwc-day-block {
 					margin-top: 26px;
@@ -821,9 +808,7 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 				<p>Ingen ordrer fundet for det valgte interval.</p>
 			<?php else : ?>
 				<?php foreach ( $grouped as $group ) : ?>
-					<?php
-					$next_unprinted = cmbwc_find_next_unprinted_order_in_rows( $group['rows'] );
-					?>
+					<?php $next_unprinted = cmbwc_find_next_unprinted_order_in_rows( $group['rows'] ); ?>
 					<div class="cmbwc-day-block">
 						<h2 class="cmbwc-day-title">
 							<?php echo esc_html( $group['label'] ); ?>
@@ -894,10 +879,8 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 											<?php endif; ?>
 										</td>
 										<td class="cmbwc-status-cell">
-											<?php
-											$status_badge_style = 'background:' . esc_attr( $row['production_status_color'] ) . ';';
-											?>
-											<button type="button" class="cmbwc-status-badge button-link" style="<?php echo esc_attr( $status_badge_style ); ?>">
+											<?php $status_badge_style = 'background:' . esc_attr( $row['production_status_color'] ) . ';'; ?>
+											<button type="button" class="cmbwc-status-toggle" style="<?php echo esc_attr( $status_badge_style ); ?>">
 												<span><?php echo esc_html( $row['production_status_label'] ); ?></span>
 												<span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
 											</button>
@@ -941,14 +924,7 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 												</div>
 											<?php endif; ?>
 										</td>
-										<td>
-											<?php echo esc_html( $row['status_label'] ); ?><br>
-											<?php if ( ! empty( $row['is_printed'] ) ) : ?>
-												<span class="cmbwc-pill cmbwc-pill-printed">Printet</span>
-											<?php else : ?>
-												<span class="cmbwc-pill cmbwc-pill-unprinted">Ikke printet</span>
-											<?php endif; ?>
-										</td>
+										<td><?php echo esc_html( $row['status_label'] ); ?></td>
 										<td>
 											<div class="cmbwc-actions">
 												<a class="button button-small" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener">Forhåndsvis</a>
@@ -972,8 +948,8 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 
 		<script>
 		document.addEventListener('click', function (event) {
-			var clickedBadge = event.target.closest('.cmbwc-status-badge');
-			var clickedCell  = event.target.closest('.cmbwc-status-cell');
+			var clickedToggle = event.target.closest('.cmbwc-status-toggle');
+			var clickedCell   = event.target.closest('.cmbwc-status-cell');
 
 			document.querySelectorAll('.cmbwc-status-cell.is-open').forEach(function (cell) {
 				if (cell !== clickedCell) {
@@ -981,7 +957,7 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 				}
 			});
 
-			if (clickedBadge && clickedCell) {
+			if (clickedToggle && clickedCell) {
 				event.preventDefault();
 				clickedCell.classList.toggle('is-open');
 				return;
