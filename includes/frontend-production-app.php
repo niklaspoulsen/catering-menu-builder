@@ -117,6 +117,12 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					--cmbwc-radius: 18px;
 				}
 
+				*,
+				*::before,
+				*::after {
+					box-sizing: border-box;
+				}
+
 				html {
 					-webkit-text-size-adjust: 100%;
 				}
@@ -129,7 +135,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				.cmbwc-app {
-					max-width: 880px;
+					max-width: 1040px;
 					margin: 0 auto;
 					padding: 14px 12px 40px;
 				}
@@ -183,7 +189,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border: 1px solid var(--cmbwc-border);
 					background: #fff;
 					color: var(--cmbwc-text);
-					box-sizing: border-box;
 				}
 
 				.cmbwc-link-btn--primary,
@@ -211,6 +216,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border-radius: var(--cmbwc-radius);
 					padding: 12px 14px;
 					box-shadow: var(--cmbwc-shadow);
+					min-width: 0;
 				}
 
 				.cmbwc-field label {
@@ -253,6 +259,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					width: 22px;
 					height: 22px;
 					margin: 0;
+					flex: 0 0 auto;
 				}
 
 				.cmbwc-chip {
@@ -265,6 +272,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border: 1px solid var(--cmbwc-border);
 					font-weight: 700;
 					white-space: nowrap;
+					flex: 0 0 auto;
 				}
 
 				.cmbwc-filter-actions {
@@ -272,6 +280,12 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					display: grid;
 					grid-template-columns: 1fr 1fr;
 					gap: 10px;
+				}
+
+				.cmbwc-filter-actions .cmbwc-link-btn,
+				.cmbwc-filter-actions button.cmbwc-link-btn {
+					width: 100%;
+					cursor: pointer;
 				}
 
 				.cmbwc-day {
@@ -295,13 +309,20 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border-radius: 22px;
 					padding: 14px;
 					box-shadow: var(--cmbwc-shadow);
+					overflow: hidden;
 				}
 
-				.cmbwc-card-head {
+				.cmbwc-card-header {
 					display: flex;
 					flex-direction: column;
 					gap: 12px;
 					margin-bottom: 12px;
+				}
+
+				.cmbwc-card-title-row {
+					display: flex;
+					flex-direction: column;
+					gap: 10px;
 				}
 
 				.cmbwc-order-no {
@@ -314,11 +335,13 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					font-size: 18px;
 					font-weight: 800;
 					line-height: 1.15;
+					word-break: break-word;
 				}
 
 				.cmbwc-status-box {
 					position: relative;
 					align-self: flex-start;
+					max-width: 100%;
 				}
 
 				.cmbwc-status-toggle {
@@ -326,6 +349,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					color: #fff;
 					cursor: pointer;
 					gap: 8px;
+					max-width: 100%;
 				}
 
 				.cmbwc-status-meta {
@@ -334,6 +358,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					line-height: 1.4;
 					color: var(--cmbwc-muted);
 					max-width: 240px;
+					word-break: break-word;
 				}
 
 				.cmbwc-status-menu {
@@ -343,6 +368,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					z-index: 30;
 					display: none;
 					width: 220px;
+					max-width: calc(100vw - 40px);
 					background: #fff;
 					border: 1px solid var(--cmbwc-border);
 					border-radius: 16px;
@@ -369,7 +395,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-meta-grid {
 					display: grid;
-					grid-template-columns: repeat(3, 1fr);
+					grid-template-columns: repeat(3, minmax(0, 1fr));
 					gap: 10px;
 					margin-bottom: 12px;
 				}
@@ -379,6 +405,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border: 1px solid #edf2f7;
 					border-radius: 16px;
 					padding: 12px;
+					min-width: 0;
 				}
 
 				.cmbwc-meta-card span {
@@ -395,11 +422,14 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					display: block;
 					font-size: 16px;
 					line-height: 1.2;
+					word-break: break-word;
 				}
 
 				.cmbwc-sections {
 					display: grid;
+					grid-template-columns: 1fr;
 					gap: 10px;
+					margin-bottom: 14px;
 				}
 
 				.cmbwc-section {
@@ -407,6 +437,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border: 1px solid #edf2f7;
 					border-radius: 16px;
 					padding: 12px 13px;
+					min-width: 0;
 				}
 
 				.cmbwc-section h3 {
@@ -422,6 +453,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				.cmbwc-section li {
 					margin-bottom: 4px;
 					line-height: 1.35;
+					word-break: break-word;
 				}
 
 				.cmbwc-empty {
@@ -430,14 +462,15 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-actions {
 					display: grid;
-					grid-template-columns: repeat(3, 1fr);
+					grid-template-columns: repeat(3, minmax(0, 1fr));
 					gap: 8px;
-					margin-top: 14px;
 				}
 
 				.cmbwc-action {
 					min-height: 46px;
 					text-align: center;
+					width: 100%;
+					white-space: nowrap;
 				}
 
 				.cmbwc-empty-state {
@@ -484,22 +517,40 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						gap: 10px;
 					}
 
-					.cmbwc-filter-actions .cmbwc-link-btn {
+					.cmbwc-filter-actions .cmbwc-link-btn,
+					.cmbwc-filter-actions button.cmbwc-link-btn {
 						flex: 1;
 					}
 
-					.cmbwc-card-head {
-						flex-direction: row;
-						justify-content: space-between;
-						align-items: flex-start;
+					.cmbwc-card-header {
+						gap: 14px;
 					}
 
-					.cmbwc-cards {
-						grid-template-columns: 1fr;
+					.cmbwc-card-title-row {
+						flex-direction: row;
+						align-items: flex-start;
+						justify-content: space-between;
+						gap: 16px;
+					}
+
+					.cmbwc-meta-grid {
+						grid-template-columns: repeat(3, 140px);
+						justify-content: start;
 					}
 
 					.cmbwc-sections {
 						grid-template-columns: repeat(3, minmax(0, 1fr));
+					}
+
+					.cmbwc-actions {
+						grid-template-columns: repeat(3, max-content);
+						justify-content: start;
+					}
+
+					.cmbwc-action {
+						width: auto;
+						padding-left: 18px;
+						padding-right: 18px;
 					}
 				}
 
@@ -601,58 +652,60 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						<div class="cmbwc-cards">
 							<?php foreach ( $group['rows'] as $row ) : ?>
 								<article class="cmbwc-card">
-									<div class="cmbwc-card-head">
-										<div>
-											<div class="cmbwc-order-no">#<?php echo esc_html( $row['order_number'] ); ?></div>
-											<div class="cmbwc-customer"><?php echo esc_html( $row['customer'] ); ?></div>
-										</div>
-
-										<div class="cmbwc-status-box">
-											<button type="button" class="cmbwc-status-toggle" style="background:<?php echo esc_attr( $row['production_status_color'] ); ?>;">
-												<span><?php echo esc_html( $row['production_status_label'] ); ?></span>
-												<span aria-hidden="true">▾</span>
-											</button>
-
-											<div class="cmbwc-status-menu">
-												<?php foreach ( $all_statuses as $status_key => $status_data ) : ?>
-													<?php
-													$status_url = add_query_arg(
-														array(
-															'order_id'          => $row['order_id'],
-															'production_status' => $status_key,
-															'_wpnonce'          => $row['production_status_nonce'],
-														),
-														$row['production_status_update_base_url']
-													);
-													?>
-													<a class="cmbwc-status-option" href="<?php echo esc_url( $status_url ); ?>">
-														<?php echo esc_html( $status_data['label'] ); ?>
-													</a>
-												<?php endforeach; ?>
+									<div class="cmbwc-card-header">
+										<div class="cmbwc-card-title-row">
+											<div>
+												<div class="cmbwc-order-no">#<?php echo esc_html( $row['order_number'] ); ?></div>
+												<div class="cmbwc-customer"><?php echo esc_html( $row['customer'] ); ?></div>
 											</div>
 
-											<?php if ( ! empty( $row['production_status_meta_label'] ) ) : ?>
-												<div class="cmbwc-status-meta">
-													<?php echo esc_html( $row['production_status_meta_label'] ); ?>
+											<div class="cmbwc-status-box">
+												<button type="button" class="cmbwc-status-toggle" style="background:<?php echo esc_attr( $row['production_status_color'] ); ?>;">
+													<span><?php echo esc_html( $row['production_status_label'] ); ?></span>
+													<span aria-hidden="true">▾</span>
+												</button>
+
+												<div class="cmbwc-status-menu">
+													<?php foreach ( $all_statuses as $status_key => $status_data ) : ?>
+														<?php
+														$status_url = add_query_arg(
+															array(
+																'order_id'          => $row['order_id'],
+																'production_status' => $status_key,
+																'_wpnonce'          => $row['production_status_nonce'],
+															),
+															$row['production_status_update_base_url']
+														);
+														?>
+														<a class="cmbwc-status-option" href="<?php echo esc_url( $status_url ); ?>">
+															<?php echo esc_html( $status_data['label'] ); ?>
+														</a>
+													<?php endforeach; ?>
 												</div>
-											<?php endif; ?>
-										</div>
-									</div>
 
-									<div class="cmbwc-meta-grid">
-										<div class="cmbwc-meta-card">
-											<span>Tid</span>
-											<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
-										</div>
-
-										<div class="cmbwc-meta-card">
-											<span>Type</span>
-											<strong><?php echo esc_html( $row['delivery_type'] ); ?></strong>
+												<?php if ( ! empty( $row['production_status_meta_label'] ) ) : ?>
+													<div class="cmbwc-status-meta">
+														<?php echo esc_html( $row['production_status_meta_label'] ); ?>
+													</div>
+												<?php endif; ?>
+											</div>
 										</div>
 
-										<div class="cmbwc-meta-card">
-											<span>Kuverter</span>
-											<strong><?php echo esc_html( (string) $row['covers_total'] ); ?></strong>
+										<div class="cmbwc-meta-grid">
+											<div class="cmbwc-meta-card">
+												<span>Tid</span>
+												<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
+											</div>
+
+											<div class="cmbwc-meta-card">
+												<span>Type</span>
+												<strong><?php echo esc_html( $row['delivery_type'] ); ?></strong>
+											</div>
+
+											<div class="cmbwc-meta-card">
+												<span>Kuverter</span>
+												<strong><?php echo esc_html( (string) $row['covers_total'] ); ?></strong>
+											</div>
 										</div>
 									</div>
 
