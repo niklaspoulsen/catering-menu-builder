@@ -110,6 +110,8 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					--cmbwc-bg: #f3f4f6;
 					--cmbwc-card: #ffffff;
 					--cmbwc-border: #d8dee6;
+					--cmbwc-soft: #f7fafc;
+					--cmbwc-soft-border: #edf2f7;
 					--cmbwc-text: #1f2937;
 					--cmbwc-muted: #6b7280;
 					--cmbwc-accent: #135e96;
@@ -132,16 +134,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					background: var(--cmbwc-bg);
 					color: var(--cmbwc-text);
 					font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-				}
-
-				body.cmbwc-production-app * {
-					writing-mode: horizontal-tb !important;
-					text-orientation: mixed !important;
-				}
-
-				body.cmbwc-production-app ul,
-				body.cmbwc-production-app li {
-					max-width: 100%;
 				}
 
 				.cmbwc-app {
@@ -227,7 +219,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border-radius: var(--cmbwc-radius);
 					padding: 12px 14px;
 					box-shadow: var(--cmbwc-shadow);
-					min-width: 0;
 				}
 
 				.cmbwc-field label {
@@ -287,7 +278,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-filter-actions {
 					display: grid;
-					grid-template-columns: 1fr 1fr;
+					grid-template-columns: 1fr;
 					gap: 10px;
 				}
 
@@ -316,18 +307,17 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					background: var(--cmbwc-card);
 					border: 1px solid var(--cmbwc-border);
 					border-radius: 22px;
-					padding: 14px;
+					padding: 16px;
 					box-shadow: var(--cmbwc-shadow);
 					overflow: hidden;
 				}
 
 				.cmbwc-summary-top {
 					display: flex;
-					justify-content: space-between;
 					align-items: center;
+					justify-content: space-between;
 					gap: 12px;
-					margin-bottom: 12px;
-					flex-wrap: wrap;
+					margin-bottom: 14px;
 				}
 
 				.cmbwc-order-no {
@@ -337,7 +327,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-status-box {
 					position: relative;
-					max-width: 100%;
+					flex: 0 0 auto;
 				}
 
 				.cmbwc-status-toggle {
@@ -345,7 +335,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					color: #fff;
 					cursor: pointer;
 					gap: 8px;
-					max-width: 100%;
+					min-width: 120px;
 				}
 
 				.cmbwc-status-menu {
@@ -381,28 +371,29 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				.cmbwc-summary-customer {
-					font-size: 20px;
+					font-size: 17px;
 					font-weight: 800;
-					line-height: 1.18;
-					margin-bottom: 12px;
+					line-height: 1.2;
+					margin-bottom: 14px;
 					word-break: break-word;
 				}
 
-				.cmbwc-info-list {
-					display: flex;
-					flex-direction: column;
+				.cmbwc-meta-grid {
+					display: grid;
+					grid-template-columns: repeat(3, 1fr);
 					gap: 10px;
 					margin-bottom: 12px;
 				}
 
-				.cmbwc-info-item {
-					background: #f7fafc;
-					border: 1px solid #edf2f7;
+				.cmbwc-meta-card {
+					background: var(--cmbwc-soft);
+					border: 1px solid var(--cmbwc-soft-border);
 					border-radius: 16px;
 					padding: 12px;
+					min-width: 0;
 				}
 
-				.cmbwc-info-item span {
+				.cmbwc-meta-card span {
 					display: block;
 					margin-bottom: 6px;
 					font-size: 11px;
@@ -412,36 +403,40 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					color: var(--cmbwc-muted);
 				}
 
-				.cmbwc-info-item strong {
+				.cmbwc-meta-card strong {
 					display: block;
-					font-size: 18px;
+					font-size: 16px;
 					line-height: 1.2;
 					word-break: break-word;
 				}
 
 				.cmbwc-actions {
-					display: flex;
-					flex-direction: column;
+					display: grid;
+					grid-template-columns: repeat(3, 1fr);
 					gap: 8px;
 					margin-bottom: 10px;
 				}
 
 				.cmbwc-action {
 					width: 100%;
-					min-height: 46px;
+					min-height: 44px;
 					text-align: center;
 					white-space: nowrap;
+					padding-left: 10px;
+					padding-right: 10px;
+					font-size: 14px;
 				}
 
 				.cmbwc-detail-toggle-wrap {
-					margin-top: 2px;
+					margin-top: 4px;
 				}
 
 				.cmbwc-detail-toggle {
 					width: 100%;
 					cursor: pointer;
-					justify-content: space-between;
+					justify-content: center;
 					gap: 10px;
+					background: var(--cmbwc-soft);
 				}
 
 				.cmbwc-detail-toggle .cmbwc-chevron {
@@ -458,7 +453,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					display: none;
 					margin-top: 12px;
 					padding-top: 12px;
-					border-top: 1px solid #edf2f7;
+					border-top: 1px solid var(--cmbwc-soft-border);
 				}
 
 				.cmbwc-card.is-open .cmbwc-details {
@@ -474,17 +469,14 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				.cmbwc-sections {
-					display: flex;
-					flex-direction: column;
+					display: grid;
+					grid-template-columns: 1fr;
 					gap: 10px;
 				}
 
 				.cmbwc-section {
-					display: block;
-					width: 100%;
-					min-width: 0;
 					background: #fbfcfd;
-					border: 1px solid #edf2f7;
+					border: 1px solid var(--cmbwc-soft-border);
 					border-radius: 16px;
 					padding: 12px 13px;
 				}
@@ -502,7 +494,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				.cmbwc-section li {
 					margin-bottom: 4px;
 					line-height: 1.4;
-					white-space: normal;
 					word-break: break-word;
 					overflow-wrap: anywhere;
 				}
@@ -549,14 +540,8 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						grid-column: 1 / -1;
 					}
 
-					.cmbwc-info-list {
-						display: grid;
-						grid-template-columns: repeat(3, minmax(0, 1fr));
-					}
-
-					.cmbwc-actions {
-						display: grid;
-						grid-template-columns: repeat(3, minmax(0, 1fr));
+					.cmbwc-filter-actions {
+						grid-template-columns: 1fr 1fr;
 					}
 				}
 
@@ -576,31 +561,32 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						justify-content: space-between;
 					}
 
-					.cmbwc-filter-actions {
-						display: flex;
-						gap: 10px;
-					}
-
-					.cmbwc-filter-actions .cmbwc-link-btn,
-					.cmbwc-filter-actions button.cmbwc-link-btn {
-						flex: 1;
-					}
-
 					.cmbwc-sections {
-						display: grid;
 						grid-template-columns: repeat(3, minmax(0, 1fr));
-						gap: 10px;
 					}
 				}
 
 				@media (max-width: 640px) {
-					.cmbwc-filter-actions {
-						grid-template-columns: 1fr;
+					.cmbwc-user-links {
+						flex-direction: column;
+					}
+
+					.cmbwc-summary-top {
+						align-items: flex-start;
+						flex-direction: row;
 					}
 
 					.cmbwc-status-menu {
 						left: 0;
 						right: auto;
+					}
+
+					.cmbwc-meta-grid {
+						grid-template-columns: 1fr;
+					}
+
+					.cmbwc-actions {
+						grid-template-columns: 1fr;
 					}
 				}
 			</style>
@@ -718,18 +704,18 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 										<?php echo esc_html( $row['customer'] ); ?>
 									</div>
 
-									<div class="cmbwc-info-list">
-										<div class="cmbwc-info-item">
+									<div class="cmbwc-meta-grid">
+										<div class="cmbwc-meta-card">
 											<span>Tid</span>
 											<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
 										</div>
 
-										<div class="cmbwc-info-item">
+										<div class="cmbwc-meta-card">
 											<span>Type</span>
 											<strong><?php echo esc_html( $row['delivery_type'] ); ?></strong>
 										</div>
 
-										<div class="cmbwc-info-item">
+										<div class="cmbwc-meta-card">
 											<span>Kuverter</span>
 											<strong><?php echo esc_html( (string) $row['covers_total'] ); ?></strong>
 										</div>
