@@ -134,11 +134,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 				}
 
-				body.cmbwc-production-app ul,
-				body.cmbwc-production-app li {
-					max-width: 100%;
-				}
-
 				.cmbwc-app {
 					max-width: 980px;
 					margin: 0 auto;
@@ -181,7 +176,8 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-link-btn,
 				.cmbwc-action,
-				.cmbwc-status-toggle {
+				.cmbwc-status-toggle,
+				.cmbwc-detail-toggle {
 					display: inline-flex;
 					align-items: center;
 					justify-content: center;
@@ -317,24 +313,18 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					overflow: hidden;
 				}
 
-				.cmbwc-card-header {
-					display: grid;
-					grid-template-columns: 1fr;
+				.cmbwc-summary-top {
+					display: flex;
+					justify-content: space-between;
+					align-items: center;
 					gap: 12px;
 					margin-bottom: 12px;
+					flex-wrap: wrap;
 				}
 
 				.cmbwc-order-no {
-					font-size: 16px;
-					font-weight: 800;
-					margin-bottom: 2px;
-				}
-
-				.cmbwc-customer {
 					font-size: 18px;
 					font-weight: 800;
-					line-height: 1.15;
-					word-break: break-word;
 				}
 
 				.cmbwc-status-box {
@@ -350,18 +340,10 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					max-width: 100%;
 				}
 
-				.cmbwc-status-meta {
-					margin-top: 8px;
-					font-size: 12px;
-					line-height: 1.4;
-					color: var(--cmbwc-muted);
-					word-break: break-word;
-				}
-
 				.cmbwc-status-menu {
 					position: absolute;
 					top: calc(100% + 6px);
-					left: 0;
+					right: 0;
 					z-index: 30;
 					display: none;
 					width: 220px;
@@ -390,9 +372,17 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					background: #f4f7fa;
 				}
 
-				.cmbwc-meta-grid {
+				.cmbwc-summary-customer {
+					font-size: 17px;
+					font-weight: 800;
+					line-height: 1.18;
+					margin-bottom: 12px;
+					word-break: break-word;
+				}
+
+				.cmbwc-meta-row {
 					display: grid;
-					grid-template-columns: 1fr;
+					grid-template-columns: repeat(3, 1fr);
 					gap: 10px;
 					margin-bottom: 12px;
 				}
@@ -422,20 +412,74 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					word-break: break-word;
 				}
 
-				.cmbwc-sections {
+				.cmbwc-actions {
 					display: grid;
-					grid-template-columns: 1fr;
+					grid-template-columns: repeat(3, 1fr);
+					gap: 8px;
+					margin-bottom: 10px;
+				}
+
+				.cmbwc-action {
+					width: 100%;
+					min-height: 46px;
+					text-align: center;
+					white-space: nowrap;
+				}
+
+				.cmbwc-detail-toggle-wrap {
+					margin-top: 2px;
+				}
+
+				.cmbwc-detail-toggle {
+					width: 100%;
+					cursor: pointer;
+					justify-content: space-between;
 					gap: 10px;
-					margin-bottom: 14px;
+				}
+
+				.cmbwc-detail-toggle .cmbwc-chevron {
+					transition: transform .18s ease;
+					font-size: 16px;
+					line-height: 1;
+				}
+
+				.cmbwc-card.is-open .cmbwc-detail-toggle .cmbwc-chevron {
+					transform: rotate(180deg);
+				}
+
+				.cmbwc-details {
+					display: none;
+					margin-top: 12px;
+					padding-top: 12px;
+					border-top: 1px solid #edf2f7;
+				}
+
+				.cmbwc-card.is-open .cmbwc-details {
+					display: block;
+				}
+
+				.cmbwc-status-meta {
+					margin-bottom: 12px;
+					font-size: 12px;
+					line-height: 1.4;
+					color: var(--cmbwc-muted);
+					word-break: break-word;
+				}
+
+				.cmbwc-sections {
+					display: flex;
+					flex-direction: column;
+					gap: 10px;
 				}
 
 				.cmbwc-section {
+					display: block;
+					width: 100%;
+					min-width: 0;
 					background: #fbfcfd;
 					border: 1px solid #edf2f7;
 					border-radius: 16px;
 					padding: 12px 13px;
-					min-width: 0;
-					width: 100%;
 				}
 
 				.cmbwc-section h3 {
@@ -460,19 +504,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					color: var(--cmbwc-muted);
 				}
 
-				.cmbwc-actions {
-					display: grid;
-					grid-template-columns: 1fr;
-					gap: 8px;
-				}
-
-				.cmbwc-action {
-					min-height: 46px;
-					text-align: center;
-					width: 100%;
-					white-space: nowrap;
-				}
-
 				.cmbwc-empty-state {
 					background: #fff;
 					border: 1px solid var(--cmbwc-border);
@@ -480,16 +511,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					padding: 24px;
 					box-shadow: var(--cmbwc-shadow);
 					text-align: center;
-				}
-
-				@media (min-width: 640px) {
-					.cmbwc-meta-grid {
-						grid-template-columns: repeat(3, minmax(0, 1fr));
-					}
-
-					.cmbwc-actions {
-						grid-template-columns: repeat(3, minmax(0, 1fr));
-					}
 				}
 
 				@media (min-width: 900px) {
@@ -532,35 +553,21 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						flex: 1;
 					}
 
-					.cmbwc-card-header {
-						grid-template-columns: minmax(220px, 280px) 1fr;
-						align-items: start;
-					}
-
-					.cmbwc-meta-grid {
-						grid-template-columns: repeat(3, minmax(120px, 150px));
-						justify-content: start;
-						margin-bottom: 0;
+					.cmbwc-summary-customer {
+						max-width: 460px;
 					}
 
 					.cmbwc-sections {
+						display: grid;
 						grid-template-columns: repeat(3, minmax(0, 1fr));
-					}
-
-					.cmbwc-actions {
-						grid-template-columns: repeat(3, max-content);
-						justify-content: start;
-					}
-
-					.cmbwc-action {
-						width: auto;
-						padding-left: 18px;
-						padding-right: 18px;
+						gap: 10px;
 					}
 				}
 
 				@media (max-width: 640px) {
-					.cmbwc-filters {
+					.cmbwc-filters,
+					.cmbwc-meta-row,
+					.cmbwc-actions {
 						grid-template-columns: 1fr;
 					}
 
@@ -571,6 +578,15 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 					.cmbwc-chip {
 						align-self: flex-start;
+					}
+
+					.cmbwc-summary-top {
+						align-items: stretch;
+					}
+
+					.cmbwc-status-menu {
+						left: 0;
+						right: auto;
 					}
 				}
 			</style>
@@ -654,100 +670,54 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 						<div class="cmbwc-cards">
 							<?php foreach ( $group['rows'] as $row ) : ?>
-								<article class="cmbwc-card">
-									<div class="cmbwc-card-header">
-										<div>
-											<div class="cmbwc-order-no">#<?php echo esc_html( $row['order_number'] ); ?></div>
-											<div class="cmbwc-customer"><?php echo esc_html( $row['customer'] ); ?></div>
+								<article class="cmbwc-card" data-order-card>
+									<div class="cmbwc-summary-top">
+										<div class="cmbwc-order-no">#<?php echo esc_html( $row['order_number'] ); ?></div>
 
-											<div class="cmbwc-status-box" style="margin-top:12px;">
-												<button type="button" class="cmbwc-status-toggle" style="background:<?php echo esc_attr( $row['production_status_color'] ); ?>;">
-													<span><?php echo esc_html( $row['production_status_label'] ); ?></span>
-													<span aria-hidden="true">▾</span>
-												</button>
+										<div class="cmbwc-status-box">
+											<button type="button" class="cmbwc-status-toggle" style="background:<?php echo esc_attr( $row['production_status_color'] ); ?>;">
+												<span><?php echo esc_html( $row['production_status_label'] ); ?></span>
+												<span aria-hidden="true">▾</span>
+											</button>
 
-												<div class="cmbwc-status-menu">
-													<?php foreach ( $all_statuses as $status_key => $status_data ) : ?>
-														<?php
-														$status_url = add_query_arg(
-															array(
-																'order_id'          => $row['order_id'],
-																'production_status' => $status_key,
-																'_wpnonce'          => $row['production_status_nonce'],
-															),
-															$row['production_status_update_base_url']
-														);
-														?>
-														<a class="cmbwc-status-option" href="<?php echo esc_url( $status_url ); ?>">
-															<?php echo esc_html( $status_data['label'] ); ?>
-														</a>
-													<?php endforeach; ?>
-												</div>
-
-												<?php if ( ! empty( $row['production_status_meta_label'] ) ) : ?>
-													<div class="cmbwc-status-meta">
-														<?php echo esc_html( $row['production_status_meta_label'] ); ?>
-													</div>
-												<?php endif; ?>
-											</div>
-										</div>
-
-										<div class="cmbwc-meta-grid">
-											<div class="cmbwc-meta-card">
-												<span>Tid</span>
-												<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
-											</div>
-
-											<div class="cmbwc-meta-card">
-												<span>Type</span>
-												<strong><?php echo esc_html( $row['delivery_type'] ); ?></strong>
-											</div>
-
-											<div class="cmbwc-meta-card">
-												<span>Kuverter</span>
-												<strong><?php echo esc_html( (string) $row['covers_total'] ); ?></strong>
+											<div class="cmbwc-status-menu">
+												<?php foreach ( $all_statuses as $status_key => $status_data ) : ?>
+													<?php
+													$status_url = add_query_arg(
+														array(
+															'order_id'          => $row['order_id'],
+															'production_status' => $status_key,
+															'_wpnonce'          => $row['production_status_nonce'],
+														),
+														$row['production_status_update_base_url']
+													);
+													?>
+													<a class="cmbwc-status-option" href="<?php echo esc_url( $status_url ); ?>">
+														<?php echo esc_html( $status_data['label'] ); ?>
+													</a>
+												<?php endforeach; ?>
 											</div>
 										</div>
 									</div>
 
-									<div class="cmbwc-sections">
-										<div class="cmbwc-section">
-											<h3>Menuer</h3>
-											<?php if ( ! empty( $row['items'] ) ) : ?>
-												<ul>
-													<?php foreach ( $row['items'] as $line ) : ?>
-														<li><?php echo esc_html( $line ); ?></li>
-													<?php endforeach; ?>
-												</ul>
-											<?php else : ?>
-												<div class="cmbwc-empty">-</div>
-											<?php endif; ?>
+									<div class="cmbwc-summary-customer">
+										<?php echo esc_html( $row['customer'] ); ?>
+									</div>
+
+									<div class="cmbwc-meta-row">
+										<div class="cmbwc-meta-card">
+											<span>Tid</span>
+											<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
 										</div>
 
-										<div class="cmbwc-section">
-											<h3>Tilvalg</h3>
-											<?php if ( ! empty( $row['addons'] ) ) : ?>
-												<ul>
-													<?php foreach ( $row['addons'] as $line ) : ?>
-														<li><?php echo esc_html( $line ); ?></li>
-													<?php endforeach; ?>
-												</ul>
-											<?php else : ?>
-												<div class="cmbwc-empty">-</div>
-											<?php endif; ?>
+										<div class="cmbwc-meta-card">
+											<span>Type</span>
+											<strong><?php echo esc_html( $row['delivery_type'] ); ?></strong>
 										</div>
 
-										<div class="cmbwc-section">
-											<h3>Service</h3>
-											<?php if ( ! empty( $row['service'] ) ) : ?>
-												<ul>
-													<?php foreach ( $row['service'] as $line ) : ?>
-														<li><?php echo esc_html( $line ); ?></li>
-													<?php endforeach; ?>
-												</ul>
-											<?php else : ?>
-												<div class="cmbwc-empty">-</div>
-											<?php endif; ?>
+										<div class="cmbwc-meta-card">
+											<span>Kuverter</span>
+											<strong><?php echo esc_html( (string) $row['covers_total'] ); ?></strong>
 										</div>
 									</div>
 
@@ -755,6 +725,62 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 										<a class="cmbwc-action" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener">Forhåndsvis</a>
 										<a class="cmbwc-action cmbwc-action--primary" href="<?php echo esc_url( $row['print_url'] ); ?>">Print</a>
 										<a class="cmbwc-action" href="<?php echo esc_url( $row['admin_order_url'] ); ?>">Åbn ordre</a>
+									</div>
+
+									<div class="cmbwc-detail-toggle-wrap">
+										<button type="button" class="cmbwc-detail-toggle" data-order-toggle>
+											<span>Vis ordredetaljer</span>
+											<span class="cmbwc-chevron" aria-hidden="true">▾</span>
+										</button>
+									</div>
+
+									<div class="cmbwc-details" data-order-details>
+										<?php if ( ! empty( $row['production_status_meta_label'] ) ) : ?>
+											<div class="cmbwc-status-meta">
+												<?php echo esc_html( $row['production_status_meta_label'] ); ?>
+											</div>
+										<?php endif; ?>
+
+										<div class="cmbwc-sections">
+											<div class="cmbwc-section">
+												<h3>Menuer</h3>
+												<?php if ( ! empty( $row['items'] ) ) : ?>
+													<ul>
+														<?php foreach ( $row['items'] as $line ) : ?>
+															<li><?php echo esc_html( $line ); ?></li>
+														<?php endforeach; ?>
+													</ul>
+												<?php else : ?>
+													<div class="cmbwc-empty">-</div>
+												<?php endif; ?>
+											</div>
+
+											<div class="cmbwc-section">
+												<h3>Tilvalg</h3>
+												<?php if ( ! empty( $row['addons'] ) ) : ?>
+													<ul>
+														<?php foreach ( $row['addons'] as $line ) : ?>
+															<li><?php echo esc_html( $line ); ?></li>
+														<?php endforeach; ?>
+													</ul>
+												<?php else : ?>
+													<div class="cmbwc-empty">-</div>
+												<?php endif; ?>
+											</div>
+
+											<div class="cmbwc-section">
+												<h3>Service</h3>
+												<?php if ( ! empty( $row['service'] ) ) : ?>
+													<ul>
+														<?php foreach ( $row['service'] as $line ) : ?>
+															<li><?php echo esc_html( $line ); ?></li>
+														<?php endforeach; ?>
+													</ul>
+												<?php else : ?>
+													<div class="cmbwc-empty">-</div>
+												<?php endif; ?>
+											</div>
+										</div>
 									</div>
 								</article>
 							<?php endforeach; ?>
@@ -766,18 +792,32 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 		<script>
 			document.addEventListener('click', function (event) {
-				var toggle = event.target.closest('.cmbwc-status-toggle');
-				var box = event.target.closest('.cmbwc-status-box');
+				var statusToggle = event.target.closest('.cmbwc-status-toggle');
+				var statusBox = event.target.closest('.cmbwc-status-box');
 
 				document.querySelectorAll('.cmbwc-status-box.is-open').forEach(function (el) {
-					if (el !== box) {
+					if (el !== statusBox) {
 						el.classList.remove('is-open');
 					}
 				});
 
-				if (toggle && box) {
+				if (statusToggle && statusBox) {
 					event.preventDefault();
-					box.classList.toggle('is-open');
+					statusBox.classList.toggle('is-open');
+					return;
+				}
+
+				var detailToggle = event.target.closest('[data-order-toggle]');
+				if (detailToggle) {
+					event.preventDefault();
+					var card = detailToggle.closest('[data-order-card]');
+					if (card) {
+						card.classList.toggle('is-open');
+						var labelSpan = detailToggle.querySelector('span');
+						if (labelSpan) {
+							labelSpan.textContent = card.classList.contains('is-open') ? 'Skjul ordredetaljer' : 'Vis ordredetaljer';
+						}
+					}
 					return;
 				}
 
