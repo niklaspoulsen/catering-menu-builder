@@ -214,6 +214,31 @@ if ( ! function_exists( 'cmbwc_get_order_production_status_updated_by' ) ) {
 	}
 }
 
+if ( ! function_exists( 'cmbwc_format_production_status_meta' ) ) {
+	function cmbwc_format_production_status_meta( $datetime_string, $user_name ) {
+		$datetime_string = trim( (string) $datetime_string );
+		$user_name       = trim( (string) $user_name );
+
+		$parts = array();
+
+		if ( '' !== $datetime_string ) {
+			$timestamp = strtotime( $datetime_string );
+
+			if ( $timestamp ) {
+				$parts[] = wp_date( 'd/m Y - H:i', $timestamp );
+			} else {
+				$parts[] = $datetime_string;
+			}
+		}
+
+		if ( '' !== $user_name ) {
+			$parts[] = $user_name;
+		}
+
+		return implode( ' - ', $parts );
+	}
+}
+
 if ( ! function_exists( 'cmbwc_sort_production_rows' ) ) {
 	function cmbwc_sort_production_rows( $a, $b ) {
 		$a_sort = isset( $a['delivery_sort'] ) ? (int) $a['delivery_sort'] : 0;
@@ -476,16 +501,6 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 				'cmbwc_manual_print_bon_' . $order->get_id()
 			);
 
-			$mark_printed_url = wp_nonce_url(
-				admin_url( 'admin-post.php?action=cmbwc_mark_bon_printed&order_id=' . $order->get_id() ),
-				'cmbwc_mark_bon_printed_' . $order->get_id()
-			);
-
-			$reset_printed_url = wp_nonce_url(
-				admin_url( 'admin-post.php?action=cmbwc_reset_bon_printed&order_id=' . $order->get_id() ),
-				'cmbwc_reset_bon_printed_' . $order->get_id()
-			);
-
 			$status_update_base_url = admin_url( 'admin-post.php?action=cmbwc_update_production_status&order_id=' . $order->get_id() );
 			$status_update_nonce    = wp_create_nonce( 'cmbwc_update_production_status_' . $order->get_id() );
 
@@ -496,6 +511,7 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 			$production_color        = isset( $production_statuses[ $production_status ]['color'] ) ? $production_statuses[ $production_status ]['color'] : '#5b646d';
 			$status_updated_at       = cmbwc_get_order_production_status_updated_at( $order->get_id() );
 			$status_updated_by       = cmbwc_get_order_production_status_updated_by( $order->get_id() );
+			$status_meta_label       = cmbwc_format_production_status_meta( $status_updated_at, $status_updated_by );
 
 			$quick_data = array(
 				'order_number'      => $order->get_order_number(),
@@ -529,8 +545,6 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 				'service'                           => array_values( array_unique( $service_output ) ),
 				'preview_url'                       => $preview_url,
 				'print_url'                         => $print_url,
-				'mark_printed_url'                  => $mark_printed_url,
-				'reset_printed_url'                 => $reset_printed_url,
 				'admin_order_url'                   => admin_url( 'post.php?post=' . $order->get_id() . '&action=edit' ),
 				'is_printed'                        => $is_printed,
 				'quick_data'                        => $quick_data,
@@ -543,6 +557,7 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 				'production_status_nonce'           => $status_update_nonce,
 				'production_status_updated_at'      => $status_updated_at,
 				'production_status_updated_by'      => $status_updated_by,
+				'production_status_meta_label'      => $status_meta_label,
 			);
 		}
 
@@ -710,6 +725,7 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 					margin-top: 6px;
 					font-size: 11px;
 					color: #646970;
+					line-height: 1.35;
 				}
 				.cmbwc-day-block {
 					margin-top: 26px;
@@ -906,21 +922,9 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 												<?php endforeach; ?>
 											</div>
 
-											<?php if ( ! empty( $row['production_status_updated_at'] ) || ! empty( $row['production_status_updated_by'] ) ) : ?>
+											<?php if ( ! empty( $row['production_status_meta_label'] ) ) : ?>
 												<div class="cmbwc-status-meta">
-													<?php
-													$meta_parts = array();
-
-													if ( ! empty( $row['production_status_updated_at'] ) ) {
-														$meta_parts[] = $row['production_status_updated_at'];
-													}
-
-													if ( ! empty( $row['production_status_updated_by'] ) ) {
-														$meta_parts[] = $row['production_status_updated_by'];
-													}
-
-													echo esc_html( implode( ' · ', $meta_parts ) );
-													?>
+													<?php echo esc_html( $row['production_status_meta_label'] ); ?>
 												</div>
 											<?php endif; ?>
 										</td>
@@ -930,11 +934,6 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 												<a class="button button-small" href="<?php echo esc_url( $row['preview_url'] ); ?>" target="_blank" rel="noopener">Forhåndsvis</a>
 												<a class="button button-small" href="<?php echo esc_url( $row['print_url'] ); ?>">Print</a>
 												<a class="button button-small" href="<?php echo esc_url( $row['admin_order_url'] ); ?>">Åbn ordre</a>
-												<?php if ( empty( $row['is_printed'] ) ) : ?>
-													<a class="button button-small" href="<?php echo esc_url( $row['mark_printed_url'] ); ?>">Marker som printet</a>
-												<?php else : ?>
-													<a class="button button-small" href="<?php echo esc_url( $row['reset_printed_url'] ); ?>">Nulstil printet</a>
-												<?php endif; ?>
 											</div>
 										</td>
 									</tr>
