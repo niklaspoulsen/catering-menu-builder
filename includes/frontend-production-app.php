@@ -134,6 +134,16 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 				}
 
+				body.cmbwc-production-app * {
+					writing-mode: horizontal-tb !important;
+					text-orientation: mixed !important;
+				}
+
+				body.cmbwc-production-app ul,
+				body.cmbwc-production-app li {
+					max-width: 100%;
+				}
+
 				.cmbwc-app {
 					max-width: 980px;
 					margin: 0 auto;
@@ -185,7 +195,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					padding: 11px 14px;
 					font-size: 15px;
 					font-weight: 700;
-					line-height: 1;
+					line-height: 1.1;
 					text-decoration: none;
 					border: 1px solid var(--cmbwc-border);
 					background: #fff;
@@ -205,7 +215,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-filters {
 					display: grid;
-					grid-template-columns: 1fr 1fr;
+					grid-template-columns: 1fr;
 					gap: 10px;
 					margin-bottom: 16px;
 				}
@@ -242,10 +252,9 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				.cmbwc-field--wide {
-					grid-column: 1 / -1;
 					display: flex;
-					align-items: center;
-					justify-content: space-between;
+					flex-direction: column;
+					align-items: stretch;
 					gap: 10px;
 				}
 
@@ -273,11 +282,10 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border: 1px solid var(--cmbwc-border);
 					font-weight: 700;
 					white-space: nowrap;
-					flex: 0 0 auto;
+					align-self: flex-start;
 				}
 
 				.cmbwc-filter-actions {
-					grid-column: 1 / -1;
 					display: grid;
 					grid-template-columns: 1fr 1fr;
 					gap: 10px;
@@ -373,29 +381,28 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				.cmbwc-summary-customer {
-					font-size: 17px;
+					font-size: 20px;
 					font-weight: 800;
 					line-height: 1.18;
 					margin-bottom: 12px;
 					word-break: break-word;
 				}
 
-				.cmbwc-meta-row {
-					display: grid;
-					grid-template-columns: repeat(3, 1fr);
+				.cmbwc-info-list {
+					display: flex;
+					flex-direction: column;
 					gap: 10px;
 					margin-bottom: 12px;
 				}
 
-				.cmbwc-meta-card {
+				.cmbwc-info-item {
 					background: #f7fafc;
 					border: 1px solid #edf2f7;
 					border-radius: 16px;
 					padding: 12px;
-					min-width: 0;
 				}
 
-				.cmbwc-meta-card span {
+				.cmbwc-info-item span {
 					display: block;
 					margin-bottom: 6px;
 					font-size: 11px;
@@ -405,16 +412,16 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					color: var(--cmbwc-muted);
 				}
 
-				.cmbwc-meta-card strong {
+				.cmbwc-info-item strong {
 					display: block;
-					font-size: 16px;
+					font-size: 18px;
 					line-height: 1.2;
 					word-break: break-word;
 				}
 
 				.cmbwc-actions {
-					display: grid;
-					grid-template-columns: repeat(3, 1fr);
+					display: flex;
+					flex-direction: column;
 					gap: 8px;
 					margin-bottom: 10px;
 				}
@@ -513,7 +520,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					text-align: center;
 				}
 
-				@media (min-width: 900px) {
+				@media (min-width: 760px) {
 					.cmbwc-app {
 						padding: 18px 18px 48px;
 					}
@@ -535,12 +542,38 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					}
 
 					.cmbwc-filters {
+						grid-template-columns: repeat(2, minmax(0, 1fr));
+					}
+
+					.cmbwc-field--wide {
+						grid-column: 1 / -1;
+					}
+
+					.cmbwc-info-list {
+						display: grid;
+						grid-template-columns: repeat(3, minmax(0, 1fr));
+					}
+
+					.cmbwc-actions {
+						display: grid;
+						grid-template-columns: repeat(3, minmax(0, 1fr));
+					}
+				}
+
+				@media (min-width: 1100px) {
+					.cmbwc-filters {
 						grid-template-columns: repeat(5, minmax(0, 1fr));
 					}
 
 					.cmbwc-field--wide,
 					.cmbwc-filter-actions {
 						grid-column: auto;
+					}
+
+					.cmbwc-field--wide {
+						flex-direction: row;
+						align-items: center;
+						justify-content: space-between;
 					}
 
 					.cmbwc-filter-actions {
@@ -553,10 +586,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						flex: 1;
 					}
 
-					.cmbwc-summary-customer {
-						max-width: 460px;
-					}
-
 					.cmbwc-sections {
 						display: grid;
 						grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -565,23 +594,8 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				@media (max-width: 640px) {
-					.cmbwc-filters,
-					.cmbwc-meta-row,
-					.cmbwc-actions {
+					.cmbwc-filter-actions {
 						grid-template-columns: 1fr;
-					}
-
-					.cmbwc-field--wide {
-						flex-direction: column;
-						align-items: stretch;
-					}
-
-					.cmbwc-chip {
-						align-self: flex-start;
-					}
-
-					.cmbwc-summary-top {
-						align-items: stretch;
 					}
 
 					.cmbwc-status-menu {
@@ -704,18 +718,18 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 										<?php echo esc_html( $row['customer'] ); ?>
 									</div>
 
-									<div class="cmbwc-meta-row">
-										<div class="cmbwc-meta-card">
+									<div class="cmbwc-info-list">
+										<div class="cmbwc-info-item">
 											<span>Tid</span>
 											<strong><?php echo esc_html( $row['delivery_time'] ? $row['delivery_time'] : '-' ); ?></strong>
 										</div>
 
-										<div class="cmbwc-meta-card">
+										<div class="cmbwc-info-item">
 											<span>Type</span>
 											<strong><?php echo esc_html( $row['delivery_type'] ); ?></strong>
 										</div>
 
-										<div class="cmbwc-meta-card">
+										<div class="cmbwc-info-item">
 											<span>Kuverter</span>
 											<strong><?php echo esc_html( (string) $row['covers_total'] ); ?></strong>
 										</div>
