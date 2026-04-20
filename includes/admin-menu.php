@@ -46,6 +46,15 @@ function cmbwc_register_admin_menu() {
 
 	add_submenu_page(
 		'cmbwc-catering',
+		'Produktionsapp',
+		'Produktionsapp',
+		'manage_woocommerce',
+		'cmbwc-production-app-link',
+		'cmbwc_render_production_app_link_page'
+	);
+
+	add_submenu_page(
+		'cmbwc-catering',
 		'Print / Bonner',
 		'Print / Bonner',
 		'manage_woocommerce',
@@ -66,6 +75,22 @@ function cmbwc_render_admin_welcome_page() {
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-production-overview' ) ); ?>">Produktionsoverblik</a></li>
 			<li><a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-print-settings' ) ); ?>">Print / Bonner</a></li>
 		</ul>
+	</div>
+	<?php
+}
+
+function cmbwc_render_production_app_link_page() {
+	if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		return;
+	}
+
+	$url = function_exists( 'cmbwc_get_production_app_url' ) ? cmbwc_get_production_app_url() : home_url( '/produktion/' );
+	?>
+	<div class="wrap">
+		<h1>Produktionsapp</h1>
+		<p>Åbn den mobilvenlige produktionsvisning her:</p>
+		<p><a class="button button-primary" href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener">Åbn produktionsapp</a></p>
+		<p><code><?php echo esc_html( $url ); ?></code></p>
 	</div>
 	<?php
 }
