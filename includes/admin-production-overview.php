@@ -239,6 +239,20 @@ if ( ! function_exists( 'cmbwc_format_production_status_meta' ) ) {
 	}
 }
 
+if ( ! function_exists( 'cmbwc_clean_service_label' ) ) {
+	function cmbwc_clean_service_label( $label ) {
+		$label = trim( (string) $label );
+
+		if ( '' === $label ) {
+			return '';
+		}
+
+		$label = preg_replace( '/^\s*\d+\s*x\s*/iu', '', $label );
+
+		return trim( (string) $label );
+	}
+}
+
 if ( ! function_exists( 'cmbwc_sort_production_rows' ) ) {
 	function cmbwc_sort_production_rows( $a, $b ) {
 		$a_sort = isset( $a['delivery_sort'] ) ? (int) $a['delivery_sort'] : 0;
@@ -310,22 +324,6 @@ if ( ! function_exists( 'cmbwc_get_order_delivery_type_label' ) ) {
 		}
 
 		return 'Levering';
-	}
-}
-
-if ( ! function_exists( 'cmbwc_find_next_unprinted_order_in_rows' ) ) {
-	function cmbwc_find_next_unprinted_order_in_rows( $rows ) {
-		if ( empty( $rows ) || ! is_array( $rows ) ) {
-			return null;
-		}
-
-		foreach ( $rows as $row ) {
-			if ( empty( $row['is_printed'] ) ) {
-				return $row;
-			}
-		}
-
-		return null;
 	}
 }
 
@@ -430,7 +428,7 @@ if ( ! function_exists( 'cmbwc_get_production_orders' ) ) {
 					$service_lines = preg_split( '/\r\n|\r|\n/', $service );
 
 					foreach ( $service_lines as $service_line ) {
-						$service_line = trim( (string) $service_line );
+						$service_line = cmbwc_clean_service_label( $service_line );
 
 						if ( '' !== $service_line ) {
 							$service_output[] = $service_line;
@@ -651,6 +649,34 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 					align-items: center;
 					margin: 16px 0 20px;
 				}
+				.cmbwc-table {
+					width: 100%;
+				}
+				.cmbwc-table td,
+				.cmbwc-table th {
+					vertical-align: top;
+				}
+				.cmbwc-table th:nth-child(1),
+				.cmbwc-table th:nth-child(3),
+				.cmbwc-table th:nth-child(4),
+				.cmbwc-table th:nth-child(5),
+				.cmbwc-table th:nth-child(9),
+				.cmbwc-table th:nth-child(10),
+				.cmbwc-table th:nth-child(11),
+				.cmbwc-table td:nth-child(1),
+				.cmbwc-table td:nth-child(3),
+				.cmbwc-table td:nth-child(4),
+				.cmbwc-table td:nth-child(5),
+				.cmbwc-table td:nth-child(9),
+				.cmbwc-table td:nth-child(10),
+				.cmbwc-table td:nth-child(11) {
+					white-space: nowrap;
+				}
+				.cmbwc-table td:nth-child(6),
+				.cmbwc-table td:nth-child(7),
+				.cmbwc-table td:nth-child(8) {
+					min-width: 160px;
+				}
 				.cmbwc-status-cell {
 					min-width: 185px;
 					position: relative;
@@ -726,6 +752,7 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 					font-size: 11px;
 					color: #646970;
 					line-height: 1.35;
+					white-space: normal;
 				}
 				.cmbwc-day-block {
 					margin-top: 26px;
@@ -739,22 +766,6 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 					font-weight: 400;
 					color: #50575e;
 				}
-				.cmbwc-next-print {
-					display: inline-flex;
-					align-items: center;
-					gap: 6px;
-					margin: 10px 0 0;
-					padding: 7px 11px;
-					border-radius: 999px;
-					background: #eef5ff;
-					color: #135e96;
-					font-weight: 600;
-					text-decoration: none;
-				}
-				.cmbwc-next-print:hover,
-				.cmbwc-next-print:focus {
-					color: #0b4b77;
-				}
 				.cmbwc-summary-list {
 					margin: 0;
 					padding-left: 16px;
@@ -767,15 +778,13 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 				}
 				.cmbwc-actions {
 					display: flex;
-					flex-wrap: wrap;
+					flex-wrap: nowrap;
 					gap: 6px;
+					align-items: center;
 				}
-				.cmbwc-table td,
-				.cmbwc-table th {
-					vertical-align: top;
-				}
-				.cmbwc-quick-preview {
-					max-width: 680px;
+				.cmbwc-actions .button {
+					white-space: nowrap;
+					margin: 0;
 				}
 			</style>
 
@@ -824,18 +833,11 @@ if ( ! function_exists( 'cmbwc_render_production_overview_page' ) ) {
 				<p>Ingen ordrer fundet for det valgte interval.</p>
 			<?php else : ?>
 				<?php foreach ( $grouped as $group ) : ?>
-					<?php $next_unprinted = cmbwc_find_next_unprinted_order_in_rows( $group['rows'] ); ?>
 					<div class="cmbwc-day-block">
 						<h2 class="cmbwc-day-title">
 							<?php echo esc_html( $group['label'] ); ?>
 							<span class="cmbwc-day-cover-count">- <?php echo esc_html( (string) $group['covers_total'] ); ?> kuverter</span>
 						</h2>
-
-						<?php if ( $next_unprinted && ! empty( $next_unprinted['print_url'] ) ) : ?>
-							<a class="cmbwc-next-print" href="<?php echo esc_url( $next_unprinted['print_url'] ); ?>">
-								Print næste ikke-printede bon (#<?php echo esc_html( $next_unprinted['order_number'] ); ?>)
-							</a>
-						<?php endif; ?>
 
 						<table class="widefat striped cmbwc-table" style="margin-top:10px;">
 							<thead>
