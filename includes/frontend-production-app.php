@@ -134,8 +134,13 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 				}
 
+				body.cmbwc-production-app ul,
+				body.cmbwc-production-app li {
+					max-width: 100%;
+				}
+
 				.cmbwc-app {
-					max-width: 1040px;
+					max-width: 980px;
 					margin: 0 auto;
 					padding: 14px 12px 40px;
 				}
@@ -313,16 +318,10 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				.cmbwc-card-header {
-					display: flex;
-					flex-direction: column;
+					display: grid;
+					grid-template-columns: 1fr;
 					gap: 12px;
 					margin-bottom: 12px;
-				}
-
-				.cmbwc-card-title-row {
-					display: flex;
-					flex-direction: column;
-					gap: 10px;
 				}
 
 				.cmbwc-order-no {
@@ -340,7 +339,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-status-box {
 					position: relative;
-					align-self: flex-start;
 					max-width: 100%;
 				}
 
@@ -357,7 +355,6 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					font-size: 12px;
 					line-height: 1.4;
 					color: var(--cmbwc-muted);
-					max-width: 240px;
 					word-break: break-word;
 				}
 
@@ -395,7 +392,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-meta-grid {
 					display: grid;
-					grid-template-columns: repeat(3, minmax(0, 1fr));
+					grid-template-columns: 1fr;
 					gap: 10px;
 					margin-bottom: 12px;
 				}
@@ -438,6 +435,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border-radius: 16px;
 					padding: 12px 13px;
 					min-width: 0;
+					width: 100%;
 				}
 
 				.cmbwc-section h3 {
@@ -452,8 +450,10 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-section li {
 					margin-bottom: 4px;
-					line-height: 1.35;
+					line-height: 1.4;
+					white-space: normal;
 					word-break: break-word;
+					overflow-wrap: anywhere;
 				}
 
 				.cmbwc-empty {
@@ -462,7 +462,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 
 				.cmbwc-actions {
 					display: grid;
-					grid-template-columns: repeat(3, minmax(0, 1fr));
+					grid-template-columns: 1fr;
 					gap: 8px;
 				}
 
@@ -482,7 +482,17 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					text-align: center;
 				}
 
-				@media (min-width: 768px) {
+				@media (min-width: 640px) {
+					.cmbwc-meta-grid {
+						grid-template-columns: repeat(3, minmax(0, 1fr));
+					}
+
+					.cmbwc-actions {
+						grid-template-columns: repeat(3, minmax(0, 1fr));
+					}
+				}
+
+				@media (min-width: 900px) {
 					.cmbwc-app {
 						padding: 18px 18px 48px;
 					}
@@ -523,19 +533,14 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					}
 
 					.cmbwc-card-header {
-						gap: 14px;
-					}
-
-					.cmbwc-card-title-row {
-						flex-direction: row;
-						align-items: flex-start;
-						justify-content: space-between;
-						gap: 16px;
+						grid-template-columns: minmax(220px, 280px) 1fr;
+						align-items: start;
 					}
 
 					.cmbwc-meta-grid {
-						grid-template-columns: repeat(3, 140px);
+						grid-template-columns: repeat(3, minmax(120px, 150px));
 						justify-content: start;
+						margin-bottom: 0;
 					}
 
 					.cmbwc-sections {
@@ -555,9 +560,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				}
 
 				@media (max-width: 640px) {
-					.cmbwc-filters,
-					.cmbwc-meta-grid,
-					.cmbwc-actions {
+					.cmbwc-filters {
 						grid-template-columns: 1fr;
 					}
 
@@ -653,13 +656,11 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 							<?php foreach ( $group['rows'] as $row ) : ?>
 								<article class="cmbwc-card">
 									<div class="cmbwc-card-header">
-										<div class="cmbwc-card-title-row">
-											<div>
-												<div class="cmbwc-order-no">#<?php echo esc_html( $row['order_number'] ); ?></div>
-												<div class="cmbwc-customer"><?php echo esc_html( $row['customer'] ); ?></div>
-											</div>
+										<div>
+											<div class="cmbwc-order-no">#<?php echo esc_html( $row['order_number'] ); ?></div>
+											<div class="cmbwc-customer"><?php echo esc_html( $row['customer'] ); ?></div>
 
-											<div class="cmbwc-status-box">
+											<div class="cmbwc-status-box" style="margin-top:12px;">
 												<button type="button" class="cmbwc-status-toggle" style="background:<?php echo esc_attr( $row['production_status_color'] ); ?>;">
 													<span><?php echo esc_html( $row['production_status_label'] ); ?></span>
 													<span aria-hidden="true">▾</span>
