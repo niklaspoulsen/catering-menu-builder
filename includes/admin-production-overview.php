@@ -158,7 +158,15 @@ if ( ! function_exists( 'cmbwc_get_order_production_status' ) ) {
 	function cmbwc_get_order_production_status( $order_id ) {
 		$order_id = absint( $order_id );
 		$statuses = cmbwc_get_production_statuses();
-		$status   = (string) get_post_meta( $order_id, '_cmbwc_production_status', true );
+		$status   = '';
+
+		if ( $order_id && function_exists( 'wc_get_order' ) ) {
+			$order = wc_get_order( $order_id );
+
+			if ( $order && is_a( $order, 'WC_Order' ) ) {
+				$status = (string) $order->get_meta( '_cmbwc_production_status', true );
+			}
+		}
 
 		if ( ! isset( $statuses[ $status ] ) ) {
 			$status = cmbwc_get_default_production_status();
@@ -186,17 +194,25 @@ if ( ! function_exists( 'cmbwc_update_order_production_status' ) ) {
 		$order_id = absint( $order_id );
 		$statuses = cmbwc_get_production_statuses();
 
-		if ( ! $order_id || ! isset( $statuses[ $status ] ) ) {
+		if ( ! $order_id || ! isset( $statuses[ $status ] ) || ! function_exists( 'wc_get_order' ) ) {
 			return false;
 		}
 
-		update_post_meta( $order_id, '_cmbwc_production_status', $status );
-		update_post_meta( $order_id, '_cmbwc_production_status_updated_at', current_time( 'mysql' ) );
+		$order = wc_get_order( $order_id );
+
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return false;
+		}
+
+		$order->update_meta_data( '_cmbwc_production_status', $status );
+		$order->update_meta_data( '_cmbwc_production_status_updated_at', current_time( 'mysql' ) );
 
 		$current_user = wp_get_current_user();
 		if ( $current_user && ! empty( $current_user->display_name ) ) {
-			update_post_meta( $order_id, '_cmbwc_production_status_updated_by', $current_user->display_name );
+			$order->update_meta_data( '_cmbwc_production_status_updated_by', $current_user->display_name );
 		}
+
+		$order->save();
 
 		return true;
 	}
@@ -204,13 +220,37 @@ if ( ! function_exists( 'cmbwc_update_order_production_status' ) ) {
 
 if ( ! function_exists( 'cmbwc_get_order_production_status_updated_at' ) ) {
 	function cmbwc_get_order_production_status_updated_at( $order_id ) {
-		return (string) get_post_meta( absint( $order_id ), '_cmbwc_production_status_updated_at', true );
+		$order_id = absint( $order_id );
+
+		if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+			return '';
+		}
+
+		$order = wc_get_order( $order_id );
+
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return '';
+		}
+
+		return (string) $order->get_meta( '_cmbwc_production_status_updated_at', true );
 	}
 }
 
 if ( ! function_exists( 'cmbwc_get_order_production_status_updated_by' ) ) {
 	function cmbwc_get_order_production_status_updated_by( $order_id ) {
-		return (string) get_post_meta( absint( $order_id ), '_cmbwc_production_status_updated_by', true );
+		$order_id = absint( $order_id );
+
+		if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+			return '';
+		}
+
+		$order = wc_get_order( $order_id );
+
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return '';
+		}
+
+		return (string) $order->get_meta( '_cmbwc_production_status_updated_by', true );
 	}
 }
 

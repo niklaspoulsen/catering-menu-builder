@@ -211,12 +211,39 @@ function cmbwc_bon_get_deposit_line_from_item( $item ) {
  * Print-status helpers.
  */
 function cmbwc_is_order_bon_printed( $order_id ) {
-	return 'yes' === get_post_meta( $order_id, '_cmbwc_bon_printed', true );
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+		return false;
+	}
+
+	$order = wc_get_order( $order_id );
+
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+		return false;
+	}
+
+	return 'yes' === $order->get_meta( '_cmbwc_bon_printed', true );
 }
 
 function cmbwc_mark_order_bon_printed( $order_id ) {
-	update_post_meta( $order_id, '_cmbwc_bon_printed', 'yes' );
-	update_post_meta( $order_id, '_cmbwc_bon_printed_at', current_time( 'mysql' ) );
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+		return false;
+	}
+
+	$order = wc_get_order( $order_id );
+
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+		return false;
+	}
+
+	$order->update_meta_data( '_cmbwc_bon_printed', 'yes' );
+	$order->update_meta_data( '_cmbwc_bon_printed_at', current_time( 'mysql' ) );
+	$order->save();
+
+	return true;
 }
 
 /**
@@ -252,7 +279,15 @@ function cmbwc_acquire_printnode_lock( $order_id, $ttl = 15 ) {
 
 	$locked_until = time() + $ttl;
 	set_transient( cmbwc_get_printnode_lock_key( $order_id ), $locked_until, $ttl );
-	update_post_meta( $order_id, '_cmbwc_printnode_last_lock', $locked_until );
+
+	if ( function_exists( 'wc_get_order' ) ) {
+		$order = wc_get_order( $order_id );
+
+		if ( $order && is_a( $order, 'WC_Order' ) ) {
+			$order->update_meta_data( '_cmbwc_printnode_last_lock', $locked_until );
+			$order->save();
+		}
+	}
 
 	return true;
 }
@@ -268,12 +303,39 @@ function cmbwc_release_printnode_lock( $order_id ) {
 }
 
 function cmbwc_unmark_order_bon_printed( $order_id ) {
-	delete_post_meta( $order_id, '_cmbwc_bon_printed' );
-	delete_post_meta( $order_id, '_cmbwc_bon_printed_at' );
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+		return false;
+	}
+
+	$order = wc_get_order( $order_id );
+
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+		return false;
+	}
+
+	$order->delete_meta_data( '_cmbwc_bon_printed' );
+	$order->delete_meta_data( '_cmbwc_bon_printed_at' );
+	$order->save();
+
+	return true;
 }
 
 function cmbwc_get_order_bon_printed_at( $order_id ) {
-	return (string) get_post_meta( $order_id, '_cmbwc_bon_printed_at', true );
+	$order_id = absint( $order_id );
+
+	if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) {
+		return '';
+	}
+
+	$order = wc_get_order( $order_id );
+
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+		return '';
+	}
+
+	return (string) $order->get_meta( '_cmbwc_bon_printed_at', true );
 }
 
 /**
@@ -752,20 +814,34 @@ function cmbwc_add_preview_button_on_order_edit( $order ) {
 add_action( 'add_meta_boxes', 'cmbwc_register_print_status_metabox' );
 
 function cmbwc_register_print_status_metabox() {
-	add_meta_box(
-		'cmbwc-print-status',
-		'BON / Printstatus',
-		'cmbwc_render_print_status_metabox',
-		'shop_order',
-		'side',
-		'default'
-	);
+	$screens = array( 'shop_order' );
+
+	if ( function_exists( 'wc_get_page_screen_id' ) ) {
+		$screens[] = wc_get_page_screen_id( 'shop-order' );
+	}
+
+	foreach ( array_unique( array_filter( $screens ) ) as $screen ) {
+		add_meta_box(
+			'cmbwc-print-status',
+			'BON / Printstatus',
+			'cmbwc_render_print_status_metabox',
+			$screen,
+			'side',
+			'default'
+		);
+	}
 }
 
-function cmbwc_render_print_status_metabox( $post ) {
-	$order = wc_get_order( $post->ID );
+function cmbwc_render_print_status_metabox( $object ) {
+	$order = null;
 
-	if ( ! $order ) {
+	if ( $object && is_a( $object, 'WC_Order' ) ) {
+		$order = $object;
+	} elseif ( isset( $object->ID ) ) {
+		$order = wc_get_order( $object->ID );
+	}
+
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
 		echo '<p>Ordre ikke fundet.</p>';
 		return;
 	}
