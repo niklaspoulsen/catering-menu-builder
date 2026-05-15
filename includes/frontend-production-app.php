@@ -17,6 +17,7 @@ if ( ! function_exists( 'cmbwc_register_production_app_rewrite' ) ) {
 if ( ! function_exists( 'cmbwc_register_production_app_query_vars' ) ) {
 	function cmbwc_register_production_app_query_vars( $vars ) {
 		$vars[] = 'cmbwc_production_app';
+
 		return $vars;
 	}
 }
@@ -35,8 +36,33 @@ if ( ! function_exists( 'cmbwc_user_can_access_production_app' ) ) {
 
 if ( ! function_exists( 'cmbwc_get_current_production_app_url' ) ) {
 	function cmbwc_get_current_production_app_url() {
-		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '/produktion/';
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/produktion/';
+		$request_uri = '/' . ltrim( $request_uri, '/' );
+
 		return home_url( $request_uri );
+	}
+}
+
+if ( ! function_exists( 'cmbwc_render_production_app_error_page' ) ) {
+	function cmbwc_render_production_app_error_page( $title, $message, $status_code = 500 ) {
+		status_header( absint( $status_code ) );
+		nocache_headers();
+
+		echo '<!doctype html>';
+		echo '<html lang="da">';
+		echo '<head>';
+		echo '<meta charset="utf-8">';
+		echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+		echo '<meta name="robots" content="noindex,nofollow">';
+		echo '<title>' . esc_html( $title ) . '</title>';
+		echo '</head>';
+		echo '<body style="font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;background:#f3f4f6;color:#1f2937;">';
+		echo '<div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #d8dee6;border-radius:16px;padding:24px;">';
+		echo '<h1 style="margin-top:0;">' . esc_html( $title ) . '</h1>';
+		echo '<p>' . esc_html( $message ) . '</p>';
+		echo '</div>';
+		echo '</body>';
+		echo '</html>';
 	}
 }
 
@@ -52,11 +78,28 @@ if ( ! function_exists( 'cmbwc_maybe_render_production_app' ) ) {
 		}
 
 		if ( ! cmbwc_user_can_access_production_app() ) {
-			status_header( 403 );
-			nocache_headers();
-			echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ingen adgang</title></head><body style="font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><h1>Ingen adgang</h1><p>Du har ikke adgang til produktionsvisningen.</p></body></html>';
+			cmbwc_render_production_app_error_page(
+				'Ingen adgang',
+				'Du har ikke adgang til produktionsvisningen.',
+				403
+			);
 			exit;
 		}
+
+		if (
+			! function_exists( 'cmbwc_get_production_orders' ) ||
+			! function_exists( 'cmbwc_group_production_rows_by_date' ) ||
+			! function_exists( 'cmbwc_get_production_statuses' )
+		) {
+			cmbwc_render_production_app_error_page(
+				'Produktionsapp kunne ikke indlæses',
+				'En nødvendig plugin-funktion mangler. Tjek at alle plugin-filer er uploadet korrekt.',
+				500
+			);
+			exit;
+		}
+
+		nocache_headers();
 
 		cmbwc_render_frontend_production_app();
 		exit;
@@ -65,6 +108,12 @@ if ( ! function_exists( 'cmbwc_maybe_render_production_app' ) ) {
 
 if ( ! function_exists( 'cmbwc_format_delivery_day_title' ) ) {
 	function cmbwc_format_delivery_day_title( $label, $covers_total ) {
+		$label = trim( (string) $label );
+
+		if ( '' === $label ) {
+			$label = 'Ukendt dato';
+		}
+
 		return trim( $label . ' - ' . (int) $covers_total . ' kuverter' );
 	}
 }
@@ -76,12 +125,22 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 		$date_to           = isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '';
 		$production_status = isset( $_GET['production_status'] ) ? sanitize_text_field( wp_unslash( $_GET['production_status'] ) ) : '';
 		$hide_completed    = isset( $_GET['hide_completed'] ) ? sanitize_text_field( wp_unslash( $_GET['hide_completed'] ) ) : 'no';
-		$all_statuses      = cmbwc_get_production_statuses();
 
-		if ( '' === $date_from && '' === $date_to ) {
+		$allowed_presets = array( 'today', 'week', 'month', 'upcoming' );
+		if ( ! in_array( $preset, $allowed_presets, true ) ) {
+			$preset = 'upcoming';
+		}
+
+		if ( '' === $date_from && '' === $date_to && function_exists( 'cmbwc_get_production_preset_dates' ) ) {
 			$preset_dates = cmbwc_get_production_preset_dates( $preset );
-			$date_from    = $preset_dates['date_from'];
-			$date_to      = $preset_dates['date_to'];
+			$date_from    = isset( $preset_dates['date_from'] ) ? $preset_dates['date_from'] : '';
+			$date_to      = isset( $preset_dates['date_to'] ) ? $preset_dates['date_to'] : '';
+		}
+
+		$all_statuses = cmbwc_get_production_statuses();
+
+		if ( '' !== $production_status && ! isset( $all_statuses[ $production_status ] ) ) {
+			$production_status = '';
 		}
 
 		$rows = cmbwc_get_production_orders(
@@ -103,6 +162,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 		<head>
 			<meta charset="<?php bloginfo( 'charset' ); ?>">
 			<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+			<meta name="robots" content="noindex,nofollow">
 			<title>Produktion</title>
 			<?php wp_head(); ?>
 			<style>
@@ -119,7 +179,8 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					--cmbwc-radius: 18px;
 				}
 
-				html, body {
+				html,
+				body {
 					margin: 0 !important;
 					padding: 0 !important;
 					background: var(--cmbwc-bg) !important;
@@ -325,7 +386,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					border-radius: 22px;
 					padding: 16px;
 					box-shadow: var(--cmbwc-shadow);
-					overflow: hidden;
+					overflow: visible;
 				}
 
 				.cmbwc-summary-top {
@@ -360,7 +421,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				.cmbwc-status-menu {
 					position: absolute;
 					top: calc(100% + 6px);
-					left: 0;
+					right: 0;
 					z-index: 30;
 					display: none;
 					width: 220px;
@@ -385,8 +446,15 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 					font-weight: 700;
 				}
 
-				.cmbwc-status-option:hover {
+				.cmbwc-status-option:hover,
+				.cmbwc-status-option:focus {
 					background: #f4f7fa;
+					color: var(--cmbwc-text);
+					outline: none;
+				}
+
+				.cmbwc-status-option.is-current {
+					background: #eef6ff;
 				}
 
 				.cmbwc-summary-customer {
@@ -599,7 +667,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				<div class="cmbwc-topbar-row">
 					<div class="cmbwc-brand">
 						<h1>Produktion</h1>
-						<p><?php echo esc_html( $current_user->display_name ); ?> · Catering drift</p>
+						<p><?php echo esc_html( $current_user && $current_user->display_name ? $current_user->display_name : 'Bruger' ); ?> · Catering drift</p>
 					</div>
 
 					<div class="cmbwc-user-links">
@@ -636,7 +704,7 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 						<option value="">Alle</option>
 						<?php foreach ( $all_statuses as $status_key => $status_data ) : ?>
 							<option value="<?php echo esc_attr( $status_key ); ?>" <?php selected( $production_status, $status_key ); ?>>
-								<?php echo esc_html( $status_data['label'] ); ?>
+								<?php echo esc_html( isset( $status_data['label'] ) ? $status_data['label'] : $status_key ); ?>
 							</option>
 						<?php endforeach; ?>
 					</select>
@@ -691,9 +759,12 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 														),
 														$row['production_status_update_base_url']
 													);
+
+													$status_label = isset( $status_data['label'] ) ? $status_data['label'] : $status_key;
+													$is_current   = isset( $row['production_status'] ) && $status_key === $row['production_status'];
 													?>
-													<a class="cmbwc-status-option" href="<?php echo esc_url( $status_url ); ?>">
-														<?php echo esc_html( $status_data['label'] ); ?>
+													<a class="cmbwc-status-option <?php echo $is_current ? 'is-current' : ''; ?>" href="<?php echo esc_url( $status_url ); ?>">
+														<?php echo esc_html( $status_label ); ?>
 													</a>
 												<?php endforeach; ?>
 											</div>
@@ -810,14 +881,19 @@ if ( ! function_exists( 'cmbwc_render_frontend_production_app' ) ) {
 				var detailToggle = event.target.closest('[data-order-toggle]');
 				if (detailToggle) {
 					event.preventDefault();
+
 					var card = detailToggle.closest('[data-order-card]');
+
 					if (card) {
 						card.classList.toggle('is-open');
+
 						var labelSpan = detailToggle.querySelector('span');
+
 						if (labelSpan) {
 							labelSpan.textContent = card.classList.contains('is-open') ? 'Skjul ordredetaljer' : 'Vis ordredetaljer';
 						}
 					}
+
 					return;
 				}
 
