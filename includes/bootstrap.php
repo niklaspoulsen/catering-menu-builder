@@ -4,6 +4,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once CMBWC_PATH . 'includes/block-cart-integration.php';
+
 require_once CMBWC_PATH . 'includes/admin-menu.php';
 require_once CMBWC_PATH . 'includes/admin-service-options.php';
 require_once CMBWC_PATH . 'includes/admin-production-overview.php';
