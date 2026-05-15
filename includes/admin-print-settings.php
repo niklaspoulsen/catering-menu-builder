@@ -26,15 +26,58 @@ if ( ! function_exists( 'cmbwc_get_print_settings_defaults' ) ) {
 	}
 }
 
+if ( ! function_exists( 'cmbwc_yes_no_setting' ) ) {
+	function cmbwc_yes_no_setting( $value ) {
+		return ( 'yes' === $value || true === $value || '1' === (string) $value || 1 === $value ) ? 'yes' : 'no';
+	}
+}
+
+if ( ! function_exists( 'cmbwc_sanitize_print_settings' ) ) {
+	function cmbwc_sanitize_print_settings( $raw ) {
+		$defaults = cmbwc_get_print_settings_defaults();
+
+		if ( ! is_array( $raw ) ) {
+			$raw = array();
+		}
+
+		$paper_width = isset( $raw['paper_width_mm'] ) ? absint( $raw['paper_width_mm'] ) : absint( $defaults['paper_width_mm'] );
+
+		if ( ! in_array( $paper_width, array( 58, 80 ), true ) ) {
+			$paper_width = 80;
+		}
+
+		return array(
+			'enabled'               => isset( $raw['enabled'] ) ? cmbwc_yes_no_setting( $raw['enabled'] ) : 'no',
+			'store_name'            => isset( $raw['store_name'] ) ? sanitize_text_field( $raw['store_name'] ) : $defaults['store_name'],
+			'headline'              => isset( $raw['headline'] ) ? sanitize_text_field( $raw['headline'] ) : $defaults['headline'],
+			'paper_width_mm'        => $paper_width,
+			'show_created'          => isset( $raw['show_created'] ) ? cmbwc_yes_no_setting( $raw['show_created'] ) : 'no',
+			'show_company'          => isset( $raw['show_company'] ) ? cmbwc_yes_no_setting( $raw['show_company'] ) : 'no',
+			'show_phone'            => isset( $raw['show_phone'] ) ? cmbwc_yes_no_setting( $raw['show_phone'] ) : 'no',
+			'show_shipping_method'  => isset( $raw['show_shipping_method'] ) ? cmbwc_yes_no_setting( $raw['show_shipping_method'] ) : 'no',
+			'show_shipping_address' => isset( $raw['show_shipping_address'] ) ? cmbwc_yes_no_setting( $raw['show_shipping_address'] ) : 'no',
+			'show_order_note'       => isset( $raw['show_order_note'] ) ? cmbwc_yes_no_setting( $raw['show_order_note'] ) : 'no',
+			'show_prices'           => isset( $raw['show_prices'] ) ? cmbwc_yes_no_setting( $raw['show_prices'] ) : 'no',
+			'show_included'         => isset( $raw['show_included'] ) ? cmbwc_yes_no_setting( $raw['show_included'] ) : 'no',
+			'show_addons'           => isset( $raw['show_addons'] ) ? cmbwc_yes_no_setting( $raw['show_addons'] ) : 'no',
+			'show_service'          => isset( $raw['show_service'] ) ? cmbwc_yes_no_setting( $raw['show_service'] ) : 'no',
+			'auto_mark_printed'     => isset( $raw['auto_mark_printed'] ) ? cmbwc_yes_no_setting( $raw['auto_mark_printed'] ) : 'no',
+		);
+	}
+}
+
 if ( ! function_exists( 'cmbwc_get_print_settings' ) ) {
 	function cmbwc_get_print_settings() {
-		$saved = get_option( 'cmbwc_print_settings', array() );
+		$saved    = get_option( 'cmbwc_print_settings', array() );
+		$defaults = cmbwc_get_print_settings_defaults();
 
 		if ( ! is_array( $saved ) ) {
 			$saved = array();
 		}
 
-		return wp_parse_args( $saved, cmbwc_get_print_settings_defaults() );
+		$settings = wp_parse_args( $saved, $defaults );
+
+		return cmbwc_sanitize_print_settings( $settings );
 	}
 }
 
@@ -50,6 +93,18 @@ if ( ! function_exists( 'cmbwc_get_print_setting' ) ) {
 	}
 }
 
+if ( ! function_exists( 'cmbwc_render_print_checkbox' ) ) {
+	function cmbwc_render_print_checkbox( $settings, $key, $label ) {
+		$value = isset( $settings[ $key ] ) ? $settings[ $key ] : 'no';
+		?>
+		<label class="cmbwc-print-checkbox">
+			<input type="checkbox" name="cmbwc_print_settings[<?php echo esc_attr( $key ); ?>]" value="yes" <?php checked( $value, 'yes' ); ?>>
+			<?php echo esc_html( $label ); ?>
+		</label>
+		<?php
+	}
+}
+
 if ( ! function_exists( 'cmbwc_render_print_settings_page' ) ) {
 	function cmbwc_render_print_settings_page() {
 		if ( ! current_user_can( 'manage_woocommerce' ) ) {
@@ -60,25 +115,8 @@ if ( ! function_exists( 'cmbwc_render_print_settings_page' ) ) {
 			isset( $_POST['cmbwc_print_settings_nonce'] ) &&
 			wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cmbwc_print_settings_nonce'] ) ), 'cmbwc_save_print_settings' )
 		) {
-			$raw = isset( $_POST['cmbwc_print_settings'] ) ? wp_unslash( $_POST['cmbwc_print_settings'] ) : array();
-
-			$clean = array(
-				'enabled'               => ( isset( $raw['enabled'] ) && 'yes' === $raw['enabled'] ) ? 'yes' : 'no',
-				'store_name'            => isset( $raw['store_name'] ) ? sanitize_text_field( $raw['store_name'] ) : '',
-				'headline'              => isset( $raw['headline'] ) ? sanitize_text_field( $raw['headline'] ) : '',
-				'paper_width_mm'        => isset( $raw['paper_width_mm'] ) ? max( 58, min( 80, absint( $raw['paper_width_mm'] ) ) ) : 80,
-				'show_created'          => ( isset( $raw['show_created'] ) && 'yes' === $raw['show_created'] ) ? 'yes' : 'no',
-				'show_company'          => ( isset( $raw['show_company'] ) && 'yes' === $raw['show_company'] ) ? 'yes' : 'no',
-				'show_phone'            => ( isset( $raw['show_phone'] ) && 'yes' === $raw['show_phone'] ) ? 'yes' : 'no',
-				'show_shipping_method'  => ( isset( $raw['show_shipping_method'] ) && 'yes' === $raw['show_shipping_method'] ) ? 'yes' : 'no',
-				'show_shipping_address' => ( isset( $raw['show_shipping_address'] ) && 'yes' === $raw['show_shipping_address'] ) ? 'yes' : 'no',
-				'show_order_note'       => ( isset( $raw['show_order_note'] ) && 'yes' === $raw['show_order_note'] ) ? 'yes' : 'no',
-				'show_prices'           => ( isset( $raw['show_prices'] ) && 'yes' === $raw['show_prices'] ) ? 'yes' : 'no',
-				'show_included'         => ( isset( $raw['show_included'] ) && 'yes' === $raw['show_included'] ) ? 'yes' : 'no',
-				'show_addons'           => ( isset( $raw['show_addons'] ) && 'yes' === $raw['show_addons'] ) ? 'yes' : 'no',
-				'show_service'          => ( isset( $raw['show_service'] ) && 'yes' === $raw['show_service'] ) ? 'yes' : 'no',
-				'auto_mark_printed'     => ( isset( $raw['auto_mark_printed'] ) && 'yes' === $raw['auto_mark_printed'] ) ? 'yes' : 'no',
-			);
+			$raw   = isset( $_POST['cmbwc_print_settings'] ) ? wp_unslash( $_POST['cmbwc_print_settings'] ) : array();
+			$clean = cmbwc_sanitize_print_settings( $raw );
 
 			update_option( 'cmbwc_print_settings', $clean );
 
@@ -87,13 +125,53 @@ if ( ! function_exists( 'cmbwc_render_print_settings_page' ) ) {
 
 		$settings = cmbwc_get_print_settings();
 		?>
-		<div class="wrap">
+		<div class="wrap cmbwc-print-settings-page">
 			<h1>Print / Bonner</h1>
 
 			<p>Her styrer du layoutet til den BON, som PrintNode skal bruge.</p>
 
-			<div style="background:#fff;border:1px solid #ccd0d4;padding:16px 18px;margin:16px 0;max-width:1100px;">
-				<h2 style="margin-top:0;">Vigtigt i PrintNode-pluginet</h2>
+			<style>
+				.cmbwc-print-settings-page .cmbwc-admin-notice-box {
+					background: #fff;
+					border: 1px solid #ccd0d4;
+					padding: 16px 18px;
+					margin: 16px 0;
+					max-width: 1100px;
+					border-radius: 8px;
+				}
+
+				.cmbwc-print-settings-page .cmbwc-admin-notice-box h2 {
+					margin-top: 0;
+				}
+
+				.cmbwc-print-settings-page .cmbwc-print-settings-table {
+					max-width: 1100px;
+					background: #fff;
+					padding: 12px 18px;
+					border: 1px solid #ccd0d4;
+					border-radius: 8px;
+				}
+
+				.cmbwc-print-settings-page .cmbwc-print-checkbox {
+					display: block;
+					margin-bottom: 8px;
+				}
+
+				.cmbwc-print-settings-page .cmbwc-actions {
+					margin-top: 16px;
+					display: flex;
+					gap: 10px;
+					flex-wrap: wrap;
+					align-items: center;
+				}
+
+				.cmbwc-print-settings-page .description {
+					max-width: 720px;
+				}
+			</style>
+
+			<div class="cmbwc-admin-notice-box">
+				<h2>Vigtigt i PrintNode-pluginet</h2>
 				<ol style="padding-left:18px;">
 					<li>Sæt flueben i <strong>Simple order summary</strong>.</li>
 					<li>Vælg den printer der skal bruges, og slå <strong>Enable this printer</strong> til.</li>
@@ -106,7 +184,7 @@ if ( ! function_exists( 'cmbwc_render_print_settings_page' ) ) {
 			<form method="post">
 				<?php wp_nonce_field( 'cmbwc_save_print_settings', 'cmbwc_print_settings_nonce' ); ?>
 
-				<table class="form-table" role="presentation" style="max-width:1100px;background:#fff;padding:12px 18px;border:1px solid #ccd0d4;">
+				<table class="form-table cmbwc-print-settings-table" role="presentation">
 					<tbody>
 						<tr>
 							<th scope="row">Aktivér catering-BON</th>
@@ -119,48 +197,67 @@ if ( ! function_exists( 'cmbwc_render_print_settings_page' ) ) {
 						</tr>
 
 						<tr>
-							<th scope="row">Butiksnavn</th>
+							<th scope="row">
+								<label for="cmbwc_print_store_name">Butiksnavn</label>
+							</th>
 							<td>
-								<input type="text" class="regular-text" name="cmbwc_print_settings[store_name]" value="<?php echo esc_attr( $settings['store_name'] ); ?>">
+								<input
+									type="text"
+									id="cmbwc_print_store_name"
+									class="regular-text"
+									name="cmbwc_print_settings[store_name]"
+									value="<?php echo esc_attr( $settings['store_name'] ); ?>"
+								>
 							</td>
 						</tr>
 
 						<tr>
-							<th scope="row">Overskrift</th>
+							<th scope="row">
+								<label for="cmbwc_print_headline">Overskrift</label>
+							</th>
 							<td>
-								<input type="text" class="regular-text" name="cmbwc_print_settings[headline]" value="<?php echo esc_attr( $settings['headline'] ); ?>">
+								<input
+									type="text"
+									id="cmbwc_print_headline"
+									class="regular-text"
+									name="cmbwc_print_settings[headline]"
+									value="<?php echo esc_attr( $settings['headline'] ); ?>"
+								>
 							</td>
 						</tr>
 
 						<tr>
-							<th scope="row">Bonbredde</th>
+							<th scope="row">
+								<label for="cmbwc_print_paper_width">Bonbredde</label>
+							</th>
 							<td>
-								<select name="cmbwc_print_settings[paper_width_mm]">
+								<select id="cmbwc_print_paper_width" name="cmbwc_print_settings[paper_width_mm]">
 									<option value="80" <?php selected( (int) $settings['paper_width_mm'], 80 ); ?>>80 mm</option>
 									<option value="58" <?php selected( (int) $settings['paper_width_mm'], 58 ); ?>>58 mm</option>
 								</select>
+								<p class="description">Vælg den samme bredde som i PrintNode-printeropsætningen.</p>
 							</td>
 						</tr>
 
 						<tr>
 							<th scope="row">Vis oplysninger</th>
 							<td>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_created]" value="yes" <?php checked( $settings['show_created'], 'yes' ); ?>> Oprettet dato/tid</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_company]" value="yes" <?php checked( $settings['show_company'], 'yes' ); ?>> Firma</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_phone]" value="yes" <?php checked( $settings['show_phone'], 'yes' ); ?>> Telefon</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_shipping_method]" value="yes" <?php checked( $settings['show_shipping_method'], 'yes' ); ?>> Leveringsmetode</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_shipping_address]" value="yes" <?php checked( $settings['show_shipping_address'], 'yes' ); ?>> Adresse</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_order_note]" value="yes" <?php checked( $settings['show_order_note'], 'yes' ); ?>> Kundebemærkning</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_prices]" value="yes" <?php checked( $settings['show_prices'], 'yes' ); ?>> Priser</label>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_created', 'Oprettet dato/tid' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_company', 'Firma' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_phone', 'Telefon' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_shipping_method', 'Leveringsmetode' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_shipping_address', 'Adresse' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_order_note', 'Kundebemærkning' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_prices', 'Priser' ); ?>
 							</td>
 						</tr>
 
 						<tr>
 							<th scope="row">Vis produktblokke</th>
 							<td>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_included]" value="yes" <?php checked( $settings['show_included'], 'yes' ); ?>> Indhold</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_addons]" value="yes" <?php checked( $settings['show_addons'], 'yes' ); ?>> Tilvalg</label>
-								<label style="display:block;margin-bottom:6px;"><input type="checkbox" name="cmbwc_print_settings[show_service]" value="yes" <?php checked( $settings['show_service'], 'yes' ); ?>> Service</label>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_included', 'Indhold' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_addons', 'Tilvalg' ); ?>
+								<?php cmbwc_render_print_checkbox( $settings, 'show_service', 'Service' ); ?>
 							</td>
 						</tr>
 
@@ -171,15 +268,18 @@ if ( ! function_exists( 'cmbwc_render_print_settings_page' ) ) {
 									<input type="checkbox" name="cmbwc_print_settings[auto_mark_printed]" value="yes" <?php checked( $settings['auto_mark_printed'], 'yes' ); ?>>
 									Markér ordre som printet når der sendes PrintNode-job manuelt fra Woo
 								</label>
+								<p class="description">
+									Dette påvirker kun pluginets interne BON-status — ikke WooCommerce-ordrestatus.
+								</p>
 							</td>
 						</tr>
 					</tbody>
 				</table>
 
-				<p style="margin-top:16px;">
+				<div class="cmbwc-actions">
 					<button type="submit" class="button button-primary">Gem printindstillinger</button>
 					<a href="<?php echo esc_url( admin_url( 'admin.php?page=cmbwc-production-overview' ) ); ?>" class="button">Gå til produktionsoverblik</a>
-				</p>
+				</div>
 			</form>
 		</div>
 		<?php
