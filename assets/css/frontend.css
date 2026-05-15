@@ -522,3 +522,15 @@
 .wcr-qty-btn:active {
   transform: scale(0.98);
 }
+
+.cmbwc-delivery-first-notice {
+	display: none;
+	margin: 0 0 14px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	background: #fff7e6;
+	border: 1px solid #f0c36d;
+	color: #5f4100;
+	font-size: 14px;
+	font-weight: 600;
+}

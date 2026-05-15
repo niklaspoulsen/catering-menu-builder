@@ -1,4 +1,6 @@
 jQuery(function ($) {
+	var deliveryPopupIsOpening = false;
+
 	function formatPrice(value) {
 		value = parseFloat(value || 0);
 		if (isNaN(value)) {
@@ -28,6 +30,176 @@ jQuery(function ($) {
 		}
 
 		return $('form.cart').first();
+	}
+
+	function hasDeliverySelectionFromConfig() {
+		if (typeof window.cmbwcFrontend === 'undefined') {
+			return false;
+		}
+
+		if (window.cmbwcFrontend.hasDeliveryChoice === true) {
+			return true;
+		}
+
+		var date = $.trim(String(window.cmbwcFrontend.deliveryDate || ''));
+		var time = $.trim(String(window.cmbwcFrontend.deliveryTime || ''));
+
+		return date !== '' && time !== '';
+	}
+
+	function hasDeliverySelectionFromDom() {
+		var dateSelectors = [
+			'input[name="wcr_delivery_date"]',
+			'input[name="delivery_date"]',
+			'input[name="_delivery_date"]',
+			'input[name="wcr-date"]',
+			'input[data-wcr-delivery-date]'
+		];
+
+		var timeSelectors = [
+			'input[name="wcr_delivery_time"]',
+			'input[name="delivery_time"]',
+			'input[name="_delivery_time"]',
+			'input[name="wcr-time"]',
+			'input[data-wcr-delivery-time]'
+		];
+
+		var hasDate = false;
+		var hasTime = false;
+
+		dateSelectors.forEach(function (selector) {
+			var $field = $(selector).first();
+
+			if ($field.length && $.trim(String($field.val() || '')) !== '') {
+				hasDate = true;
+			}
+		});
+
+		timeSelectors.forEach(function (selector) {
+			var $field = $(selector).first();
+
+			if ($field.length && $.trim(String($field.val() || '')) !== '') {
+				hasTime = true;
+			}
+		});
+
+		if (hasDate && hasTime) {
+			return true;
+		}
+
+		var $button = $('#wcr-open-modal, .wcr-floating-button').first();
+
+		if ($button.length) {
+			var text = $.trim($button.text() || '');
+
+			if (/\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(text) && /\d{1,2}:\d{2}/.test(text)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	function hasDeliverySelection() {
+		return hasDeliverySelectionFromConfig() || hasDeliverySelectionFromDom();
+	}
+
+	function showDeliveryGuardNotice($box) {
+		if (!$box || !$box.length) {
+			return;
+		}
+
+		var message = 'Vælg venligst dato og tidspunkt først.';
+
+		if (
+			typeof window.cmbwcFrontend !== 'undefined' &&
+			window.cmbwcFrontend.messages &&
+			window.cmbwcFrontend.messages.chooseDeliveryFirst
+		) {
+			message = window.cmbwcFrontend.messages.chooseDeliveryFirst;
+		}
+
+		var $notice = $box.find('.cmbwc-delivery-first-notice');
+
+		if (!$notice.length) {
+			$notice = $('<div class="cmbwc-delivery-first-notice" role="alert"></div>');
+			$box.prepend($notice);
+		}
+
+		$notice.text(message).stop(true, true).fadeIn(120);
+
+		window.clearTimeout($notice.data('cmbwc-timeout'));
+		$notice.data(
+			'cmbwc-timeout',
+			window.setTimeout(function () {
+				$notice.fadeOut(250);
+			}, 4500)
+		);
+	}
+
+	function openDeliveryPopup() {
+		if (deliveryPopupIsOpening) {
+			return true;
+		}
+
+		deliveryPopupIsOpening = true;
+
+		var selectors = [
+			'#wcr-open-modal',
+			'.wcr-floating-button',
+			'.wcr-open-modal',
+			'[data-wcr-open-modal]',
+			'[data-open-wcr-modal]'
+		];
+
+		if (
+			typeof window.cmbwcFrontend !== 'undefined' &&
+			Array.isArray(window.cmbwcFrontend.deliveryPopupSelectors)
+		) {
+			selectors = window.cmbwcFrontend.deliveryPopupSelectors.concat(selectors);
+		}
+
+		var opened = false;
+
+		for (var i = 0; i < selectors.length; i++) {
+			var $trigger = $(selectors[i]).filter(':visible').first();
+
+			if ($trigger.length) {
+				$trigger.trigger('click');
+				opened = true;
+				break;
+			}
+		}
+
+		window.setTimeout(function () {
+			deliveryPopupIsOpening = false;
+		}, 800);
+
+		return opened;
+	}
+
+	function guardDeliveryBeforeMenuInteraction(event, element) {
+		var $target = $(element);
+		var $box = $target.closest('.cmbwc-menu-options');
+
+		if (!$box.length) {
+			return true;
+		}
+
+		if (hasDeliverySelection()) {
+			return true;
+		}
+
+		if (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+		}
+
+		showDeliveryGuardNotice($box);
+		openDeliveryPopup();
+
+		return false;
 	}
 
 	function ensureFormFields($form, $box) {
@@ -206,14 +378,6 @@ jQuery(function ($) {
 		$box.find('.cmbwc-local-sync-covers').val(String(covers));
 		$box.find('.cmbwc-local-sync-service').val(serviceData.selected);
 		$box.find('.cmbwc-local-sync-addons').val(addonsJson);
-
-		console.log('CMBWC syncWooForm', {
-			covers: covers,
-			service: serviceData.selected,
-			addons: addonData.selected,
-			addonsJson: addonsJson,
-			formFound: !!$form.length
-		});
 	}
 
 	function updateBox($box) {
@@ -248,107 +412,142 @@ jQuery(function ($) {
 		});
 	}
 
-	$(document).on('change', '.cmbwc-addon-checkbox', function () {
+	$(document).on(
+		'mousedown touchstart focusin',
+		'.cmbwc-menu-options input, .cmbwc-menu-options select, .cmbwc-menu-options button, .cmbwc-menu-options label',
+		function (event) {
+			return guardDeliveryBeforeMenuInteraction(event, this);
+		}
+	);
+
+	$(document).on('change', '.cmbwc-addon-checkbox', function (event) {
+		if (!guardDeliveryBeforeMenuInteraction(event, this)) {
+			return false;
+		}
+
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	// Tillad fri indtastning mens brugeren skriver i addon qty
-	$(document).on('input', '.cmbwc-addon-qty', function () {
+	$(document).on('input', '.cmbwc-addon-qty', function (event) {
+		if (!guardDeliveryBeforeMenuInteraction(event, this)) {
+			return false;
+		}
+
 		var value = String($(this).val() || '').replace(/[^\d]/g, '');
 		$(this).val(value);
 	});
 
-	// Håndhæv først minimum når feltet forlades / ændres
-	$(document).on('change blur', '.cmbwc-addon-qty', function () {
+	$(document).on('change blur', '.cmbwc-addon-qty', function (event) {
+		if (!guardDeliveryBeforeMenuInteraction(event, this)) {
+			return false;
+		}
+
 		normalizeAddonQty($(this));
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$(document).on('change', '.cmbwc-service-radio', function () {
+	$(document).on('change', '.cmbwc-service-radio', function (event) {
+		if (!guardDeliveryBeforeMenuInteraction(event, this)) {
+			return false;
+		}
+
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	// Tillad fri indtastning mens brugeren skriver antal kuverter
-	$(document).on('input', '.cmbwc-covers', function () {
+	$(document).on('input', '.cmbwc-covers', function (event) {
+		if (!guardDeliveryBeforeMenuInteraction(event, this)) {
+			return false;
+		}
+
 		var value = String($(this).val() || '').replace(/[^\d]/g, '');
 		$(this).val(value);
 	});
 
-	// Håndhæv først minimum når feltet forlades / ændres
-	$(document).on('change blur', '.cmbwc-covers', function () {
+	$(document).on('change blur', '.cmbwc-covers', function (event) {
+		if (!guardDeliveryBeforeMenuInteraction(event, this)) {
+			return false;
+		}
+
 		updateBox($(this).closest('.cmbwc-menu-options'));
 	});
 
-	$(document).on('submit', 'form.cart', function () {
-		updateAllBoxes();
-
+	$(document).on('submit', 'form.cart', function (event) {
 		var $form = $(this);
-		console.log('CMBWC form submit values', {
-			covers: $form.find('input[name="cmbwc_covers"]').val(),
-			service: $form.find('input[name="cmbwc_selected_service"]').val(),
-			addons: $form.find('input[name="cmbwc_selected_addons"]').val()
-		});
+		var $box = $form.find('.cmbwc-menu-options').first();
+
+		if ($box.length && !hasDeliverySelection()) {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+
+			showDeliveryGuardNotice($box);
+			openDeliveryPopup();
+
+			return false;
+		}
+
+		updateAllBoxes();
 	});
 
 	updateAllBoxes();
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-  const qtyInputs = document.querySelectorAll('input[type="number"]');
+	const qtyInputs = document.querySelectorAll('input[type="number"]');
 
-  qtyInputs.forEach(function (input) {
-    input.addEventListener('focus', function () {
-      setTimeout(() => input.select(), 0);
-    });
+	qtyInputs.forEach(function (input) {
+		input.addEventListener('focus', function () {
+			setTimeout(() => input.select(), 0);
+		});
 
-    input.addEventListener('click', function () {
-      setTimeout(() => input.select(), 0);
-    });
+		input.addEventListener('click', function () {
+			setTimeout(() => input.select(), 0);
+		});
 
-    input.addEventListener('mouseup', function (e) {
-      e.preventDefault();
-    });
+		input.addEventListener('mouseup', function (e) {
+			e.preventDefault();
+		});
 
-    if (input.parentElement.classList.contains('wcr-qty-wrap')) return;
+		if (input.parentElement.classList.contains('wcr-qty-wrap')) return;
 
-    const wrap = document.createElement('div');
-    wrap.className = 'wcr-qty-wrap';
+		const wrap = document.createElement('div');
+		wrap.className = 'wcr-qty-wrap';
 
-    const minusBtn = document.createElement('button');
-    minusBtn.type = 'button';
-    minusBtn.className = 'wcr-qty-btn wcr-qty-minus';
-    minusBtn.textContent = '−';
+		const minusBtn = document.createElement('button');
+		minusBtn.type = 'button';
+		minusBtn.className = 'wcr-qty-btn wcr-qty-minus';
+		minusBtn.textContent = '−';
 
-    const plusBtn = document.createElement('button');
-    plusBtn.type = 'button';
-    plusBtn.className = 'wcr-qty-btn wcr-qty-plus';
-    plusBtn.textContent = '+';
+		const plusBtn = document.createElement('button');
+		plusBtn.type = 'button';
+		plusBtn.className = 'wcr-qty-btn wcr-qty-plus';
+		plusBtn.textContent = '+';
 
-    input.parentNode.insertBefore(wrap, input);
-    wrap.appendChild(minusBtn);
-    wrap.appendChild(input);
-    wrap.appendChild(plusBtn);
+		input.parentNode.insertBefore(wrap, input);
+		wrap.appendChild(minusBtn);
+		wrap.appendChild(input);
+		wrap.appendChild(plusBtn);
 
-    const step = parseInt(input.step || 1, 10);
-    const min = input.min !== '' ? parseInt(input.min, 10) : 1;
-    const max = input.max !== '' ? parseInt(input.max, 10) : null;
+		const step = parseInt(input.step || 1, 10);
+		const min = input.min !== '' ? parseInt(input.min, 10) : 1;
+		const max = input.max !== '' ? parseInt(input.max, 10) : null;
 
-    minusBtn.addEventListener('click', function () {
-      let value = parseInt(input.value || min, 10);
-      value = isNaN(value) ? min : value - step;
-      if (value < min) value = min;
-      input.value = value;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+		minusBtn.addEventListener('click', function () {
+			let value = parseInt(input.value || min, 10);
+			value = isNaN(value) ? min : value - step;
+			if (value < min) value = min;
+			input.value = value;
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+		});
 
-    plusBtn.addEventListener('click', function () {
-      let value = parseInt(input.value || min, 10);
-      value = isNaN(value) ? min : value + step;
-      if (max !== null && value > max) value = max;
-      input.value = value;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  });
+		plusBtn.addEventListener('click', function () {
+			let value = parseInt(input.value || min, 10);
+			value = isNaN(value) ? min : value + step;
+			if (max !== null && value > max) value = max;
+			input.value = value;
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+		});
+	});
 });

@@ -6,6 +6,62 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 add_action( 'wp_enqueue_scripts', 'cmbwc_enqueue_assets' );
 
+function cmbwc_get_frontend_delivery_value( $keys ) {
+	foreach ( $keys as $key ) {
+		$value = '';
+
+		if ( class_exists( 'WCR_Session' ) && method_exists( 'WCR_Session', 'get_session' ) ) {
+			$value = WCR_Session::get_session( $key, '' );
+		}
+
+		if ( '' === trim( (string) $value ) && function_exists( 'WC' ) && WC()->session ) {
+			$value = WC()->session->get( $key );
+		}
+
+		$value = trim( (string) $value );
+
+		if ( '' !== $value ) {
+			return $value;
+		}
+	}
+
+	return '';
+}
+
+function cmbwc_get_frontend_delivery_state() {
+	$date = cmbwc_get_frontend_delivery_value(
+		array(
+			'wcr_delivery_date',
+			'delivery_date',
+			'_delivery_date',
+		)
+	);
+
+	$time = cmbwc_get_frontend_delivery_value(
+		array(
+			'wcr_delivery_time',
+			'delivery_time',
+			'_delivery_time',
+		)
+	);
+
+	return array(
+		'deliveryDate'      => $date,
+		'deliveryTime'      => $time,
+		'hasDeliveryChoice' => ( '' !== $date && '' !== $time ),
+		'deliveryPopupSelectors' => array(
+			'#wcr-open-modal',
+			'.wcr-floating-button',
+			'.wcr-open-modal',
+			'[data-wcr-open-modal]',
+			'[data-open-wcr-modal]',
+		),
+		'messages' => array(
+			'chooseDeliveryFirst' => 'Vælg venligst dato og tidspunkt først.',
+		),
+	);
+}
+
 function cmbwc_enqueue_assets() {
 	$css_file       = CMBWC_PATH . 'assets/css/frontend.css';
 	$js_file        = CMBWC_PATH . 'assets/js/frontend.js';
@@ -29,14 +85,16 @@ function cmbwc_enqueue_assets() {
 		true
 	);
 
+	wp_localize_script(
+		'cmbwc-frontend',
+		'cmbwcFrontend',
+		cmbwc_get_frontend_delivery_state()
+	);
+
 	if ( file_exists( $blocks_js_file ) ) {
 		$blocks_js_ver = filemtime( $blocks_js_file );
 		$dependencies  = array();
 
-		/*
-		 * WooCommerce Blocks exposes window.wc.blocksCheckout through this script.
-		 * It should normally be registered on pages using Cart/Checkout Blocks.
-		 */
 		if ( wp_script_is( 'wc-blocks-checkout', 'registered' ) ) {
 			$dependencies[] = 'wc-blocks-checkout';
 		}
