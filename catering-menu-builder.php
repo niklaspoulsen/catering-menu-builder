@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Catering Menu Builder
  * Description: Custom catering menu builder for WooCommerce.
- * Version: 1.0.1
+ * Version: 1.1.0
  * Author: Niklas Poulsen
  * Text Domain: catering-menu-builder
  * Domain Path: /languages
@@ -23,19 +23,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'CMBWC_FILE', __FILE__ );
 define( 'CMBWC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CMBWC_URL', plugin_dir_url( __FILE__ ) );
-define( 'CMBWC_VERSION', '1.0.1' );
+define( 'CMBWC_VERSION', '1.1.0' );
 
 /**
  * Declare WooCommerce feature compatibility.
  *
- * NOTE:
- * This declaration tells WooCommerce that the plugin is intended to be compatible
- * with High-Performance Order Storage (HPOS / custom order tables).
- *
- * The actual order-meta handling should still use WooCommerce order CRUD methods
- * in the individual files, especially in:
- * - includes/admin-production-overview.php
- * - includes/bon-printnode.php
+ * This declaration tells WooCommerce that the plugin is compatible with
+ * High-Performance Order Storage (HPOS / custom order tables).
  */
 add_action(
 	'before_woocommerce_init',
