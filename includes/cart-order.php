@@ -94,6 +94,7 @@ function cmbwc_child_service_locked_qty( $cart_item, $parent_qty ) {
 
 	if ( isset( $cart_item['cmbwc_child_item']['locked_qty'] ) ) {
 		$locked_qty = absint( $cart_item['cmbwc_child_item']['locked_qty'] );
+
 		if ( $locked_qty > 0 ) {
 			return $locked_qty;
 		}
@@ -164,6 +165,7 @@ function cmbwc_parse_selected_addons_from_request() {
 		}
 
 		$product = wc_get_product( $id );
+
 		if ( ! $product || 'publish' !== get_post_status( $id ) ) {
 			continue;
 		}
@@ -368,6 +370,7 @@ function cmbwc_add_cart_item_data( $cart_item_data, $product_id, $variation_id )
 	}
 
 	$allowed_addons_meta = get_post_meta( $product_id, '_cmbwc_menu_addons', true );
+
 	if ( ! is_array( $allowed_addons_meta ) ) {
 		$allowed_addons_meta = array();
 	}
@@ -749,6 +752,7 @@ function cmbwc_after_cart_item_quantity_update( $cart_item_key, $quantity, $old_
 		if ( ! empty( $item['cmbwc_data']['group_id'] ) ) {
 			cmbwc_sync_child_lines_for_group( $item['cmbwc_data']['group_id'], $quantity );
 		}
+
 		return;
 	}
 
@@ -875,9 +879,9 @@ function cmbwc_restore_service_if_removed_directly( $cart_item_key, $cart ) {
 		0,
 		array(),
 		array(
-			'cmbwc_child_item' => $removed['cmbwc_child_item'],
+			'cmbwc_child_item'              => $removed['cmbwc_child_item'],
 			'cmbwc_service_price_override' => isset( $removed['cmbwc_service_price_override'] ) ? $removed['cmbwc_service_price_override'] : null,
-			'unique_key' => md5( 'restore_service_' . $cart_item_key . '_' . microtime() ),
+			'unique_key'                   => md5( 'restore_service_' . $cart_item_key . '_' . microtime() ),
 		)
 	);
 }
